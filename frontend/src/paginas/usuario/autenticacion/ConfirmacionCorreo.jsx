@@ -6,12 +6,13 @@ function ConfirmacionCorreo() {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Extraer estado si venimos de Login (2FA Administrador)
+  // Extraer estado si venimos de Login (2FA Administrador) o Registro (confirmacion normal)
   const esAdmin2FA = location.state?.esAdmin2FA || false;
-  const correoAdmin = location.state?.correo || "";
+  const correoUsuario = location.state?.correo || "";
 
   const [codigo, setCodigo] = useState("");
   const [confirmado, setConfirmado] = useState(false);
+  const [rolVerificado, setRolVerificado] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
 
@@ -23,6 +24,11 @@ function ConfirmacionCorreo() {
       return;
     }
 
+    if (!correoUsuario) {
+      setError("No se encontró un correo asociado a esta sesión.");
+      return;
+    }
+
     setCargando(true);
     setError("");
 
@@ -31,33 +37,41 @@ function ConfirmacionCorreo() {
       
       if (esAdmin2FA) {
         // Flujo 2FA Administrador
-        respuesta = await fetch("http://localhost:3001/api/auth/verificar-2fa", {
+        respuesta = await fetch("http://localhost:3000/api/auth/login/admin/verificar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            correo_electronico: correoAdmin,
-            codigo_2fa: codigo
+            email: correoUsuario,
+            token_2fa: codigo
           })
         });
       } else {
-        // Flujo confirmacion de registro normal (GET)
-        respuesta = await fetch("http://localhost:3001/api/auth/confirmar?token=" + codigo);
+        respuesta = await fetch("http://localhost:3000/api/auth/verificar-correo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: correoUsuario, // se envía el email al backend para identificar al usuario
+            token: codigo         // Token de confirmación para verificación de correo
+          })
+        });
       }
+
+      const data = await respuesta.json();
 
       if (respuesta.ok || respuesta.status === 202) {
         if (esAdmin2FA) {
           // Si es 2FA, guardamos token y vamos directo al dashboard
-          const data = await respuesta.json();
-          localStorage.setItem("token", data.token);
-          localStorage.setItem("rol", data.rol);
+          localStorage.setItem("token", data.data?.token || "");
+          localStorage.setItem("rol", data.data?.rol || "");
           
-          if (data.rol === "administrador" || data.rol === "admin") {
+          if (data.data?.rol === "administrador" || data.rol === "admin") {
             navigate('/dashboard');
           } else {
             navigate('/eventos');
           }
         } else {
           // Si es registro normal, mostramos mensaje de exito
+          setRolVerificado(data.rol);
           setConfirmado(true);
         }
       } else {
@@ -65,7 +79,7 @@ function ConfirmacionCorreo() {
         setError(texto || "El codigo es invalido o ya fue utilizado.");
       }
     } catch (err) {
-      setError("No se pudo conectar con el servidor. Intenta de nuevo.");
+      setError("No se pudo conectar con el servidor o el código es inválido. Por favor intenta de nuevo o contacta a soporte.");
     }
 
     setCargando(false);
@@ -141,15 +155,36 @@ function ConfirmacionCorreo() {
                   Correo Confirmado
                 </h2>
 
-                <p style={{ color: 'var(--color-secundario)', marginBottom: '25px' }}>
-                  Tu cuenta ha sido verificada exitosamente. Ya puedes iniciar sesion en TrackFlow-HUB.
-                </p>
+                {/* --- RENDERIZADO CONDICIONAL SEGÚN EL ROL --- */}
+                {rolVerificado === 'operador' ? (
+                  <>
+                    <p style={{ color: 'var(--color-secundario)', marginBottom: '15px' }}>
+                      Tu cuenta ha sido verificada exitosamente. Actualmente tu perfil de operador logístico se encuentra en <strong>proceso de revisión</strong> por parte de la administración.
+                    </p>
+                    <p style={{ color: 'var(--color-secundario)', marginBottom: '25px', fontSize: '14px' }}>
+                      Te notificaremos por correo electrónico cuando seas aceptado.
+                    </p>
+                  </>
+                ) : rolVerificado === 'empresa_transporte' ? (
+                  <>
+                    <p style={{ color: 'var(--color-secundario)', marginBottom: '15px' }}>
+                      Tu cuenta ha sido verificada exitosamente. El siguiente paso es agendar una <strong>reunión virtual</strong> con nuestro equipo.
+                    </p>
+                    <p style={{ color: 'var(--color-secundario)', marginBottom: '25px', fontSize: '14px' }}>
+                      Por favor mantente atento a tu correo electrónico, ahí te enviaremos la fecha, hora y enlace de la reunión.
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ color: 'var(--color-secundario)', marginBottom: '25px' }}>
+                    Tu cuenta ha sido verificada exitosamente. Ya puedes iniciar sesión en TrackFlow-HUB.
+                  </p>
+                )}
 
                 <button
                   className="btn btn-primary w-100"
                   onClick={() => navigate('/')}
                 >
-                  Ir a Iniciar Sesion
+                  Regresar al Inicio
                 </button>
               </div>
             )}
