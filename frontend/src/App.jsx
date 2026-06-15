@@ -14,10 +14,10 @@ function App() {
       <Route path="/" element={<Login />} />
       <Route path="/registro" element={<Registro />} />
       <Route path="/confirmar-correo" element={<ConfirmacionCorreo />} />
-      <Route path="/dashboard-admin" element={<DashboardAdmin />} />
-      <Route path="/dashboard-cliente" element={<DashboardCliente />} />
-      <Route path="/dashboard-operador" element={<DashboardOperador />} />
-      <Route path="/dashboard-empresa" element={<DashboardEmpresa />} />
+      <Route path="/dashboard/admin" element={<DashboardAdmin />} />
+      <Route path="/dashboard/cliente" element={<DashboardCliente />} />
+      <Route path="/dashboard/operador" element={<DashboardOperador />} />
+      <Route path="/dashboard/empresa" element={<DashboardEmpresa />} />
     </Routes>
   );
 }
