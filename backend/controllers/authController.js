@@ -479,7 +479,7 @@ const verificarCorreo = async (req, res) => {
       );
     }
 
-    res.status(200).json({ success: true, message: "Correo verificado exitosamente." });
+    res.status(200).json({ success: true, message: "Correo verificado exitosamente.", rol: usuario.rol });
   } catch (error) {
     res.status(500).json({ message: "Error al verificar correo." });
   }
