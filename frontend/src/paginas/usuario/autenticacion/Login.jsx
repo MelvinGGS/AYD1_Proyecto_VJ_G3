@@ -26,12 +26,12 @@ function Login() {
 
     const datos = new FormData(formulario);
     const requestData = {
-      correo_electronico: datos.get("correo_electronico"),
-      contrasena: datos.get("contrasena")
+      email: datos.get("correo_electronico"),
+      password: datos.get("contrasena")
     };
 
     try {
-      const respuesta = await fetch("http://localhost:3001/api/auth/login", {
+      const respuesta = await fetch("http://localhost:3000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestData)
@@ -39,21 +39,32 @@ function Login() {
 
       if (respuesta.status === 202) {
         // Administrador requiere 2FA
-        navigate('/confirmar-correo', { state: { esAdmin2FA: true, correo: requestData.correo_electronico } });
+        navigate('/confirmar-correo', { state: { esAdmin2FA: true, correo: requestData.email } });
       } else if (respuesta.ok) {
-        // Login exitoso, guardar token y redirigir
         const data = await respuesta.json();
         localStorage.setItem("token", data.token);
         localStorage.setItem("rol", data.rol);
-        
-        if (data.rol === "administrador" || data.rol === "admin") {
-          navigate('/dashboard');
-        } else {
-          navigate('/eventos');
+
+        // Redirigir según el rol
+        switch (data.rol) {
+          case "administrador":
+            navigate('/dashboard/admin');
+            break;
+          case "cliente":
+            navigate('/dashboard/cliente');
+            break;
+          case "operador":
+            navigate('/dashboard/operador');
+            break;
+          case "empresa_transporte":
+            navigate('/dashboard/empresa');
+            break;
+          default:
+            navigate('/');
         }
       } else {
-        const texto = await respuesta.text();
-        setError(texto || "Credenciales invalidas");
+        const data = await respuesta.json();
+        setError(data.message || "Credenciales inválidas.");
       }
     } catch (err) {
       setError("Error al conectar con el servidor.");
@@ -62,97 +73,88 @@ function Login() {
   };
 
   return (
-    <div className="container-fluid min-vh-100">
-      <div className="row min-vh-100">
+    <div className="contenedor-auth">
 
-        <div className="col-lg-6 d-flex flex-column justify-content-center align-items-center panel-info text-center">
-          <h1>TrackFlow-HUB</h1>
-          <p>Sistema de Gestión de Envíos y Logística</p>
-        </div>
+      <div className="panel-info">
+        <h1>TrackFlow-HUB</h1>
+        <p>Sistema de Gestión de Envíos y Logística</p>
+      </div>
 
-        <div className="col-lg-6 d-flex justify-content-center align-items-center panel-formulario">
-          <div
-            className="card shadow p-4 w-100"
-            style={{ maxWidth: "450px" }}
+      <div className="panel-formulario">
+        <div className="card">
+
+          <h2 className="text-center mb-4" style={{ color: 'var(--color-secundario)', fontWeight: 'bold' }}>
+            Iniciar Sesión
+          </h2>
+
+          <form
+            noValidate
+            className={validado ? "was-validated" : ""}
+            onSubmit={manejarSubmit}
           >
 
-            <h2 className="text-center mb-4">
-              Iniciar Sesión
-            </h2>
+            <div className="mb-3">
+              <label className="form-label" style={{ fontWeight: '600', color: 'var(--color-secundario)' }}>
+                Correo Electrónico
+              </label>
+              <input
+                type="email"
+                name="correo_electronico"
+                className="form-control"
+                placeholder="usuario@correo.com"
+                required
+              />
+              <div className="invalid-feedback">
+                Se debe ingresar un correo electrónico válido.
+              </div>
+            </div>
 
-            <form
-              noValidate
-              className={validado ? "was-validated" : ""}
-              onSubmit={manejarSubmit}
+            <div className="mb-3">
+              <label className="form-label" style={{ fontWeight: '600', color: 'var(--color-secundario)' }}>
+                Contraseña
+              </label>
+              <input
+                type="password"
+                name="contrasena"
+                className="form-control"
+                placeholder="********"
+                minLength="8"
+                required
+              />
+              <div className="invalid-feedback">
+                La contraseña debe tener al menos 8 caracteres.
+              </div>
+            </div>
+
+            {error && (
+              <div style={{ backgroundColor: '#f8d7da', color: '#721c24', padding: '10px', borderRadius: '10px', marginBottom: '15px', fontSize: '14px', textAlign: 'center' }}>
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={cargando}
             >
+              {cargando ? 'Ingresando...' : 'Ingresar'}
+            </button>
 
-              <div className="mb-3">
-                <label className="form-label">
-                  Correo Electrónico
-                </label>
-
-                <input
-                  type="email"
-                  name="correo_electronico"
-                  className="form-control"
-                  placeholder="Ingresa tu correo electrónico"
-                  required
-                />
-
-                <div className="invalid-feedback">
-                  Se debe ingresar un correo electrónico válido.
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label">
-                  Contraseña
-                </label>
-
-                <input
-                  type="password"
-                  name="contrasena"
-                  className="form-control"
-                  placeholder="********"
-                  minLength="8"
-                  required
-                />
-
-                <div className="invalid-feedback">
-                  La contraseña debe tener al menos 8 caracteres.
-                </div>
-              </div>
-
-              {error && (
-                <div style={{ backgroundColor: '#f8d7da', color: '#721c24', padding: '10px', borderRadius: '5px', marginBottom: '15px', fontSize: '14px', textAlign: 'center' }}>
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="btn btn-primary w-100"
-                disabled={cargando}
+            <p className="text-center mt-3" style={{ fontSize: '14px', color: 'var(--color-texto-mutado)' }}>
+              ¿No tienes una cuenta?{" "}
+              <Link
+                to="/registro"
+                style={{ color: 'var(--color-primario)', fontWeight: '600', textDecoration: 'none' }}
               >
-                {cargando ? 'Ingresando...' : 'Ingresar'}
-              </button>
+                Regístrate aquí
+              </Link>
+            </p>
 
-              <p className="text-center mt-3">
-                No tienes una cuenta?{" "}
-                <Link
-                  to="/registro"
-                  className="link-secondary link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"
-                >
-                  Regístrate aquí
-                </Link>
-              </p>
+          </form>
 
-            </form>
-
-          </div>
         </div>
-
       </div>
+
     </div>
   );
 }
