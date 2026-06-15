@@ -103,22 +103,47 @@
 }
 
 /* para el responsive */
-@media (max-width: 991px){
+@media (max-width: 991px) {
 
-    .panel-info{
+    .contenedor-auth {
+        flex-direction: column;
+    }
+
+    .panel-info {
+        width: 100%;
         padding: 30px;
+        min-height: 180px;
     }
 
-    .panel-info h1{
-        font-size: 3rem;
+    .panel-info h1 {
+        font-size: 2.5rem;
     }
 
-    .card{
-        max-width: 90%;
+    .panel-info p {
+        font-size: 1rem;
+    }
+
+    .panel-formulario {
+        width: 100%;
+        padding: 30px 20px;
+    }
+
+    .card {
+        max-width: 100%;
     }
 }
 
-/* --- CLASES DE DISEÑO PREMIUM (TrackFlow-HUB) --- */
+@media (max-width: 480px) {
+
+    .panel-info h1 {
+        font-size: 2rem;
+    }
+
+    .card {
+        padding: 25px 20px;
+    }
+}
+
 
 .card-registro {
     width: 100%;
