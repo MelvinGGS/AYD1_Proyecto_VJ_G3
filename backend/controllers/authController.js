@@ -1,5 +1,6 @@
 const db = require("../config/db");
 const bcrypt = require("bcrypt");
+const { enviarCorreo } = require("../utils/mailer");
 
 // Función auxiliar para generar un token de verificación de 6 caracteres alfanuméricos
 const generarTokenVerificacion = () => {
@@ -80,6 +81,14 @@ const registrarCliente = async (req, res) => {
     ]);
 
     await client.query("COMMIT");
+
+    await enviarCorreo(
+      email,
+      "Verifica tu cuenta en TrackFlow-HUB",
+      "¡Bienvenido a TrackFlow-HUB!",
+      "Para completar tu registro de cliente, ingresa el siguiente código de 6 dígitos:",
+      tokenVerificacion
+    );
 
     // NOTA: El tokenVerificacion se devuelve en el JSON para pruebas en desarrollo, 
     // en producción se enviaría al correo electrónico.
@@ -243,6 +252,14 @@ const registrarOperador = async (req, res) => {
 
     await client.query("COMMIT");
 
+    await enviarCorreo(
+      email,
+      "Verifica tu cuenta en TrackFlow-HUB",
+      "¡Bienvenido a TrackFlow-HUB!",
+      "Para completar tu registro de cliente, ingresa el siguiente código de 6 dígitos:",
+      tokenVerificacion
+    );
+
     res.status(201).json({
       success: true,
       message: "Registro exitoso. Verifique su correo electrónico para continuar.",
@@ -378,6 +395,14 @@ const registrarEmpresa = async (req, res) => {
 
     await client.query("COMMIT");
 
+    await enviarCorreo(
+      email,
+      "Verifica tu cuenta en TrackFlow-HUB",
+      "¡Bienvenido a TrackFlow-HUB!",
+      "Para completar tu registro de cliente, ingresa el siguiente código de 6 dígitos:",
+      tokenVerificacion
+    );
+
     res.status(201).json({
       success: true,
       message: "Registro exitoso. Verifique su correo electrónico para continuar.",
@@ -404,8 +429,125 @@ const registrarEmpresa = async (req, res) => {
   }
 };
 
+// Verificar el token de 6 dígitos para nuevos usuarios
+const verificarCorreo = async (req, res) => {
+  const { email, token } = req.body;
+
+  try {
+    const { rows } = await db.pool.query("SELECT * FROM usuarios WHERE email = $1", [email]);
+    if (rows.length === 0) return res.status(404).json({ message: "Usuario no encontrado." });
+
+    const usuario = rows[0];
+    if (usuario.email_verificado) return res.status(400).json({ message: "El correo ya está verificado." });
+
+    // Validar token y expiración
+    if (usuario.token_verificacion !== token) {
+      return res.status(400).json({ message: "Código incorrecto." });
+    }
+    if (new Date() > new Date(usuario.token_verificacion_exp)) {
+      return res.status(400).json({ message: "El código ha expirado. Solicita uno nuevo." });
+    }
+
+    // Definir el siguiente estado según el rol
+    let nuevoEstado = 'activo';
+    if (usuario.rol === 'operador' || usuario.rol === 'empresa_transporte') {
+      nuevoEstado = 'pendiente_aprobacion'; // Regla estricta del proyecto
+    }
+
+    await db.pool.query(
+      "UPDATE usuarios SET email_verificado = TRUE, estado = $1, token_verificacion = NULL, token_verificacion_exp = NULL WHERE email = $2",
+      [nuevoEstado, email]
+    );
+
+    if (usuario.rol === 'operador') {
+      await enviarCorreo(
+        email,
+        "Perfil en revisión - TrackFlow-HUB",
+        "¡Correo verificado con éxito!",
+        "Tu cuenta ha sido verificada. Actualmente tu perfil de operador logístico se encuentra en proceso de revisión por parte de la administración. Te notificaremos cuando seas aceptado.",
+        "" // Pasamos vacío porque no hay token que mostrar
+      );
+    }
+
+    if (usuario.rol === 'empresa_transporte') {
+      await enviarCorreo(
+        email,
+        "Bienvenido - TrackFlow-HUB",
+        "¡Correo verificado con éxito!",
+        "Tu cuenta ha sido verificada. Como siguiente paso, debes esperar a la reunión con el equipo de TrackFlow-HUB para validar tu empresa de transporte. Nos pondremos en contacto contigo para agendar la reunión.",
+        "" // Pasamos vacío porque no hay token que mostrar
+      );
+    }
+
+    res.status(200).json({ success: true, message: "Correo verificado exitosamente." });
+  } catch (error) {
+    res.status(500).json({ message: "Error al verificar correo." });
+  }
+};
+
+// Verificar el 2FA del Administrador
+const verificar2FAAdmin = async (req, res) => {
+  const { email, token_2fa } = req.body;
+
+  try {
+    const { rows } = await db.pool.query("SELECT * FROM usuarios WHERE email = $1 AND rol = 'administrador'", [email]);
+    if (rows.length === 0) return res.status(404).json({ message: "Administrador no encontrado." });
+
+    const admin = rows[0];
+
+    // Validar token y límite estricto de 2 minutos
+    if (admin.token_2fa !== token_2fa) return res.status(400).json({ message: "Código 2FA incorrecto." });
+    if (new Date() > new Date(admin.token_2fa_exp)) {
+      return res.status(400).json({ message: "El código 2FA ha expirado. Inicia sesión nuevamente." });
+    }
+
+    // Limpiar el token de la DB por seguridad
+    await db.pool.query("UPDATE usuarios SET token_2fa = NULL, token_2fa_exp = NULL WHERE email = $1", [email]);
+
+    // Aquí debemos generar un JWT para el administrador, pero por el momento solo devolvemos un mensaje de éxito con su ID y rol.
+    res.status(200).json({ success: true, message: "Autenticación 2FA exitosa", data: { id: admin.id, rol: admin.rol } });
+  } catch (error) {
+    res.status(500).json({ message: "Error al verificar 2FA." });
+  }
+};
+
+const correoAceptacionOperador = async (email, passwordTemporal) => {
+  await enviarCorreo(
+    email,
+    "¡Felicidades! Has sido aceptado - TrackFlow-HUB",
+    "Perfil de Operador Aceptado",
+    "Tu perfil ha sido aprobado por la administración. Para tu primer ingreso, utiliza la siguiente contraseña temporal (deberás cambiarla al entrar):",
+    passwordTemporal
+  );
+};
+
+const correoReunionEmpresa = async (email, fecha, hora, enlace) => {
+  await enviarCorreo(
+    email,
+    "Reunión de Aprobación Agendada - TrackFlow-HUB",
+    "Agendamiento de Reunión Virtual",
+    `La administración ha agendado una reunión virtual para revisar tu propuesta de servicios.<br><br><b>Fecha:</b> ${fecha}<br><b>Hora:</b> ${hora}<br><b>Enlace:</b> <a href="${enlace}">${enlace}</a>`,
+    "" 
+  );
+};
+
+const correoCredencialesEmpresa = async (email, passwordEspecial) => {
+  await enviarCorreo(
+    email,
+    "Credenciales de Acceso - TrackFlow-HUB",
+    "Empresa Aprobada",
+    "Tu empresa ha sido aprobada tras la reunión. Utiliza estas credenciales especiales para ingresar al portal:",
+    passwordEspecial
+  );
+};
+
 module.exports = {
   registrarCliente,
   registrarOperador,
-  registrarEmpresa
+  registrarEmpresa,
+  verificarCorreo,
+  verificar2FAAdmin,
+  correoAceptacionOperador,
+  correoReunionEmpresa,
+  correoCredencialesEmpresa
 };
