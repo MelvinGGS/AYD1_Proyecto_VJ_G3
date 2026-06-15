@@ -527,7 +527,7 @@ const correoReunionEmpresa = async (email, fecha, hora, enlace) => {
     "Reunión de Aprobación Agendada - TrackFlow-HUB",
     "Agendamiento de Reunión Virtual",
     `La administración ha agendado una reunión virtual para revisar tu propuesta de servicios.<br><br><b>Fecha:</b> ${fecha}<br><b>Hora:</b> ${hora}<br><b>Enlace:</b> <a href="${enlace}">${enlace}</a>`,
-    "" 
+    ""
   );
 };
 
@@ -541,6 +541,130 @@ const correoCredencialesEmpresa = async (email, passwordEspecial) => {
   );
 };
 
+// Para el login de usuarios
+const login = async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "El correo y la contraseña son requeridos.",
+      error: { code: "VALIDATION_ERROR" }
+    });
+  }
+
+  try {
+    const { rows } = await db.pool.query(
+      "SELECT * FROM usuarios WHERE email = $1",
+      [email]
+    );
+
+    if (rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: "Las credenciales son inválidas.",
+        error: { code: "INVALID_CREDENTIALS" }
+      });
+    }
+
+    const usuario = rows[0];
+
+    // para verificar si está vetado
+    if (usuario.estado === "vetado") {
+      return res.status(403).json({
+        success: false,
+        message: "Tu cuenta ha sido vetada. Contacta al administrador.",
+        error: { code: "USER_BANNED" }
+      });
+    }
+
+    // para verificar si el correo está verificado
+    if (!usuario.email_verificado) {
+      return res.status(403).json({
+        success: false,
+        message: "Debes verificar tu correo electrónico antes de ingresar.",
+        error: { code: "EMAIL_NOT_VERIFIED" }
+      });
+    }
+
+    // para verificar si operador o empresa están pendientes de aprobación
+    if (usuario.estado === "pendiente_aprobacion") {
+      return res.status(403).json({
+        success: false,
+        message: "Tu cuenta está pendiente de aprobación por el administrador.",
+        error: { code: "PENDING_APPROVAL" }
+      });
+    }
+
+    // para verificar contraseña
+    const passwordValida = await bcrypt.compare(password, usuario.password_hash);
+    if (!passwordValida) {
+      return res.status(401).json({
+        success: false,
+        message: "Las credenciales son inválidas.",
+        error: { code: "INVALID_CREDENTIALS" }
+      });
+    }
+
+    // si es administrador, generar token 2FA
+    if (usuario.rol === "administrador") {
+      const token2FA = generarTokenVerificacion();
+      const token2FAExp = new Date(Date.now() + 2 * 60 * 1000); // son 2 minutos
+
+      await db.pool.query(
+        "UPDATE usuarios SET token_2fa = $1, token_2fa_exp = $2 WHERE email = $3",
+        [token2FA, token2FAExp, email]
+      );
+
+      await enviarCorreo(
+        email,
+        "Código de autenticación 2FA - TrackFlow-HUB",
+        "Autenticación de dos pasos",
+        "Usa el siguiente código para completar tu inicio de sesión. Esto expira en 2 minutos:",
+        token2FA
+      );
+
+      return res.status(202).json({
+        success: true,
+        message: "Se ha enviado un código 2FA a tu correo.",
+        requiere_2fa: true
+      });
+    }
+
+    // para el operador, para verificar si debe cambiar contraseña temporal
+    if (usuario.rol === "operador" && usuario.contrasena_temporal) {
+      return res.status(200).json({
+        success: true,
+        message: "Debes cambiar tu contraseña temporal.",
+        requiere_cambio_password: true,
+        rol: usuario.rol,
+        email: usuario.email
+      });
+    }
+
+    // esto es para el login exitoso para cliente, operador y empresa
+    res.status(200).json({
+      success: true,
+      message: "Inicio de sesión exitoso.",
+      token: `token-simulado-${usuario.id}`,
+      rol: usuario.rol,
+      data: {
+        id: usuario.id,
+        email: usuario.email,
+        rol: usuario.rol
+      }
+    });
+
+  } catch (error) {
+    console.error("Error en login:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor.",
+      error: { code: "INTERNAL_ERROR", details: error.message }
+    });
+  }
+};
+
 module.exports = {
   registrarCliente,
   registrarOperador,
@@ -549,5 +673,6 @@ module.exports = {
   verificar2FAAdmin,
   correoAceptacionOperador,
   correoReunionEmpresa,
-  correoCredencialesEmpresa
+  correoCredencialesEmpresa,
+  login
 };
