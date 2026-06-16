@@ -504,8 +504,17 @@ const verificar2FAAdmin = async (req, res) => {
     // Limpiar el token de la DB por seguridad
     await db.pool.query("UPDATE usuarios SET token_2fa = NULL, token_2fa_exp = NULL WHERE email = $1", [email]);
 
-    // Aquí debemos generar un JWT para el administrador, pero por el momento solo devolvemos un mensaje de éxito con su ID y rol.
-    res.status(200).json({ success: true, message: "Autenticación 2FA exitosa", data: { id: admin.id, rol: admin.rol } });
+    res.status(200).json({
+      success: true,
+      message: "Autenticación 2FA exitosa",
+      token: `token-simulado-${admin.id}`,
+      data: {
+        id: admin.id,
+        email: admin.email,
+        rol: admin.rol,
+        token: `token-simulado-${admin.id}`
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: "Error al verificar 2FA." });
   }
@@ -632,7 +641,7 @@ const login = async (req, res) => {
     }
 
     // para el operador, para verificar si debe cambiar contraseña temporal
-    if (usuario.rol === "operador" && usuario.contrasena_temporal) {
+    if ((usuario.rol === "operador" || usuario.rol === "empresa_transporte") && usuario.requiere_cambio_password) {
       return res.status(200).json({
         success: true,
         message: "Debes cambiar tu contraseña temporal.",
