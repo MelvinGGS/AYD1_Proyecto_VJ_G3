@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../../estilos/admin.css";
+import SolicitudesOperadores from "./componentes/SolicitudesOperadores";
+import SolicitudesEmpresas from "./componentes/SolicitudesEmpresas";
+import RegistrarAdminForm from "./componentes/RegistrarAdminForm";
 
 const API_URL = "http://localhost:3000/api/admin";
 
@@ -367,242 +370,41 @@ function DashboardAdmin() {
         )}
 
         {vista === "operadores" && (
-          <section className="admin-table-panel">
-            <div className="admin-table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Foto</th>
-                    <th>Operador</th>
-                    <th>DPI/CUI</th>
-                    <th>Contacto</th>
-                    <th>Zona</th>
-                    <th>Estado</th>
-                    <th>Revision</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {solicitudesFiltradas.map((operador) => (
-                    <tr key={operador.solicitud_id}>
-                      <td>
-                        {operador.fotografia ? (
-                          <a href={operador.fotografia} target="_blank" rel="noreferrer" className="admin-photo-link">
-                            <img className="admin-photo" src={operador.fotografia} alt={`Foto de ${operador.nombre}`} />
-                          </a>
-                        ) : (
-                          <span className="admin-photo-placeholder">Sin foto</span>
-                        )}
-                      </td>
-                      <td>
-                        <strong>{operador.nombre} {operador.apellido}</strong>
-                        <small>{operador.email}</small>
-                      </td>
-                      <td>{operador.dpi_cui}</td>
-                      <td>
-                        <strong>{operador.telefono}</strong>
-                        <small>{operador.telefono_respaldo || "Sin respaldo"}</small>
-                      </td>
-                      <td>{operador.zona_operacion}</td>
-                      <td>
-                        {renderEstado(operador.estado_solicitud)}
-                        <small className="admin-account-state">Cuenta: {estadoTexto[operador.estado_usuario] || operador.estado_usuario}</small>
-                      </td>
-                      <td>
-                        {puedeResolver(operador.estado_solicitud) ? (
-                          <div className="admin-review-cell">
-                            <button
-                              type="button"
-                              className="admin-button primary"
-                              disabled={accionando === `aceptar-operador-${operador.solicitud_id}`}
-                              onClick={() => ejecutarAccion(
-                                `aceptar-operador-${operador.solicitud_id}`,
-                                `${API_URL}/solicitudes/operadores/${operador.solicitud_id}/aceptar`
-                              )}
-                            >
-                              Aprobar
-                            </button>
-                            <button
-                              type="button"
-                              className="admin-button danger"
-                              disabled={accionando === `rechazar-operador-${operador.solicitud_id}`}
-                              onClick={() => abrirModalRechazo("operador", operador)}
-                            >
-                              Rechazar
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="admin-row-note">{operador.motivo_rechazo || "Solicitud resuelta"}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {solicitudesFiltradas.length === 0 && !cargando && (
-                    <tr>
-                      <td colSpan="7" className="admin-empty-cell">No hay operadores en este estado.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <SolicitudesOperadores
+            operadores={solicitudesFiltradas}
+            puedeResolver={puedeResolver}
+            ejecutarAccion={ejecutarAccion}
+            abrirModalRechazo={abrirModalRechazo}
+            renderEstado={renderEstado}
+            accionando={accionando}
+            cargando={cargando}
+            API_URL={API_URL}
+            estadoTexto={estadoTexto}
+          />
         )}
 
         {vista === "empresas" && (
-          <section className="admin-table-panel">
-            <div className="admin-table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Empresa</th>
-                    <th>NIT</th>
-                    <th>Licencia</th>
-                    <th>Contacto</th>
-                    <th>Reunion</th>
-                    <th>Estado</th>
-                    <th>Revision</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {solicitudesFiltradas.map((empresa) => (
-                    <tr key={empresa.solicitud_id}>
-                      <td>
-                        <strong>{empresa.nombre_empresa}</strong>
-                        <small>{empresa.email}</small>
-                      </td>
-                      <td>{empresa.nit}</td>
-                      <td>{empresa.numero_licencia_operativa}</td>
-                      <td>
-                        <strong>{empresa.telefono}</strong>
-                        <small>{empresa.telefono_respaldo || "Sin respaldo"}</small>
-                      </td>
-                      <td>
-                        {empresa.reunion_agendada ? (
-                          <div className="admin-meeting-summary">
-                            <strong>{new Date(empresa.reunion_fecha).toLocaleString()}</strong>
-                            <a href={empresa.reunion_enlace} target="_blank" rel="noreferrer">Abrir enlace</a>
-                          </div>
-                        ) : (
-                          <span className="admin-row-note">Sin reunion</span>
-                        )}
-                      </td>
-                      <td>
-                        {renderEstado(empresa.estado_solicitud)}
-                        <small className="admin-account-state">Cuenta: {estadoTexto[empresa.estado_usuario] || empresa.estado_usuario}</small>
-                      </td>
-                      <td>
-                        {puedeResolver(empresa.estado_solicitud) ? (
-                          <div className="admin-review-cell wide">
-                            <div className="admin-action-inline">
-                              <button
-                                type="button"
-                                className="admin-button secondary"
-                                disabled={accionando === `reunion-${empresa.solicitud_id}`}
-                                onClick={() => abrirModalReunion(empresa)}
-                              >
-                                Agendar reunion
-                              </button>
-                              <button
-                                type="button"
-                                className="admin-button primary"
-                                disabled={accionando === `aceptar-empresa-${empresa.solicitud_id}`}
-                                onClick={() => ejecutarAccion(
-                                  `aceptar-empresa-${empresa.solicitud_id}`,
-                                  `${API_URL}/solicitudes/empresas/${empresa.solicitud_id}/aceptar`
-                                )}
-                              >
-                                Aprobar
-                              </button>
-                              <button
-                                type="button"
-                                className="admin-button danger"
-                                disabled={accionando === `rechazar-empresa-${empresa.solicitud_id}`}
-                                onClick={() => abrirModalRechazo("empresa", empresa)}
-                              >
-                                Rechazar
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="admin-row-note">{empresa.motivo_rechazo || "Solicitud resuelta"}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {solicitudesFiltradas.length === 0 && !cargando && (
-                    <tr>
-                      <td colSpan="7" className="admin-empty-cell">No hay empresas en este estado.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <SolicitudesEmpresas
+            empresas={solicitudesFiltradas}
+            puedeResolver={puedeResolver}
+            ejecutarAccion={ejecutarAccion}
+            abrirModalRechazo={abrirModalRechazo}
+            abrirModalReunion={abrirModalReunion}
+            renderEstado={renderEstado}
+            accionando={accionando}
+            cargando={cargando}
+            API_URL={API_URL}
+            estadoTexto={estadoTexto}
+          />
         )}
 
         {vista === "administradores" && (
-          <form className="admin-form-panel" onSubmit={registrarAdministrador}>
-            <div className="admin-form-grid">
-              <label>
-                Nombre
-                <input
-                  type="text"
-                  value={adminForm.nombre}
-                  onChange={(e) => setAdminForm({ ...adminForm, nombre: e.target.value })}
-                  required
-                />
-              </label>
-              <label>
-                Apellido
-                <input
-                  type="text"
-                  value={adminForm.apellido}
-                  onChange={(e) => setAdminForm({ ...adminForm, apellido: e.target.value })}
-                  required
-                />
-              </label>
-              <label>
-                Telefono
-                <input
-                  type="tel"
-                  value={adminForm.telefono}
-                  onChange={(e) => setAdminForm({ ...adminForm, telefono: e.target.value })}
-                />
-              </label>
-              <label>
-                Correo electronico
-                <input
-                  type="email"
-                  value={adminForm.email}
-                  onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
-                  required
-                />
-              </label>
-              <label>
-                Contrasena
-                <input
-                  type="password"
-                  minLength="8"
-                  value={adminForm.password}
-                  onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
-                  required
-                />
-              </label>
-              <label>
-                Confirmar contrasena
-                <input
-                  type="password"
-                  minLength="8"
-                  value={adminForm.confirmar_password}
-                  onChange={(e) => setAdminForm({ ...adminForm, confirmar_password: e.target.value })}
-                  required
-                />
-              </label>
-            </div>
-
-            <button className="admin-button primary admin-submit" type="submit" disabled={accionando === "crear-admin"}>
-              Registrar administrador
-            </button>
-          </form>
+          <RegistrarAdminForm
+            adminForm={adminForm}
+            setAdminForm={setAdminForm}
+            registrarAdministrador={registrarAdministrador}
+            accionando={accionando}
+          />
         )}
       </section>
 
