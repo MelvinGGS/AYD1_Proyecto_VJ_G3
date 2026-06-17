@@ -42,6 +42,14 @@ function Login() {
         navigate('/confirmar-correo', { state: { esAdmin2FA: true, correo: requestData.email } });
       } else if (respuesta.ok) {
         const data = await respuesta.json();
+        
+        if (data.requiere_cambio_password) {
+          localStorage.setItem("token", data.token);
+          localStorage.setItem("rol", data.rol);
+          navigate('/cambiar-password-temporal', { state: { correo: data.email || requestData.email, rol: data.rol } });
+          return;
+        }
+
         localStorage.setItem("token", data.token);
         localStorage.setItem("rol", data.rol);
 
