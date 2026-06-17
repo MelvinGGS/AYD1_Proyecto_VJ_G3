@@ -379,11 +379,13 @@ const registrarAdministrador = async (req, res) => {
     });
   }
 
+  const emailLower = email.toLowerCase().trim();
+
   const client = await db.pool.connect();
   try {
     await client.query("BEGIN");
 
-    const existeEmail = await client.query("SELECT id FROM usuarios WHERE email = $1", [email]);
+    const existeEmail = await client.query("SELECT id FROM usuarios WHERE LOWER(email) = $1", [emailLower]);
     if (existeEmail.rows.length > 0) {
       await client.query("ROLLBACK");
       return res.status(409).json({
@@ -400,7 +402,7 @@ const registrarAdministrador = async (req, res) => {
         VALUES ($1, $2, 'administrador', 'activo', TRUE)
         RETURNING id, email, rol, estado
       `,
-      [email, passwordHash]
+      [emailLower, passwordHash]
     );
 
     const admin = usuarioRes.rows[0];
