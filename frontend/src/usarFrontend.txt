@@ -1,0 +1,31 @@
+REQUISITOS PARA EJECUTAR EL FRONTEND
+
+- Node.js v20 o superior
+- npm
+- Git
+- Visual Studio Code 
+
+Pasos:
+
+1. Clonar el repositorio
+   git clone repo
+
+
+2. Entrar a la carpeta del proyecto
+   cd frontend
+
+3. Instalar Bootstrap
+   npm install bootstrap
+
+4. Instalar para las rutas
+   npm install react-router-dom
+
+4. Instalar dependencias
+   npm install
+
+5. Ejecutar el proyecto
+   npm run dev
+
+Notas:
+- No subir la carpeta node_modules.
+- El proyecto corre por defecto en http://localhost:5173/

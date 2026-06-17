@@ -1,0 +1,245 @@
+@import "./variables.css";
+
+.contenedor-auth{
+
+    min-height:100vh;
+
+    display:flex;
+}
+
+.panel-info{
+
+    width:55%;
+
+    background:var(--color-primario);
+
+    color:white;
+
+    display:flex;
+    flex-direction:column;
+
+    justify-content:center;
+    align-items:center;
+
+    padding:50px;
+}
+
+.panel-info h1{
+
+    font-size:4rem;
+    font-weight: bold;
+}
+
+.panel-info p{
+
+    margin-top:15px;
+
+    font-size:1.2rem;
+}
+
+.panel-formulario{
+
+    width:45%;
+
+    display:flex;
+
+    justify-content:center;
+    align-items:center;
+}
+
+.card{
+
+   width: 100%;
+
+    max-width: 400px;
+
+
+    background: white;
+    padding: 40px;
+
+    border-radius: 15px !important;
+
+    border: none !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,.1) !important;
+}
+
+.form-control{
+    padding: 12px;
+    border: 1px solid var(--color-secundario);
+    border-radius: 10px;
+}
+
+.control label {
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.control input {
+    padding: 12px;
+    border: 1px solid var(--color-secundario);
+    border-radius: 10px;
+    outline: none;
+}
+
+.form-control:focus{
+    border-color: var(--color-primario);
+    box-shadow: none;
+}
+
+
+.btn-primary{
+    width: 100%;
+    padding: 12px;
+
+    border: none;
+    border-radius: 10px;
+
+    background: var(--color-primario) !important;
+    color: white;
+}
+
+.btn-primary:hover{
+    background: var(--color-secundario) !important;
+}
+
+/* para el responsive */
+@media (max-width: 991px) {
+
+    .contenedor-auth {
+        flex-direction: column;
+    }
+
+    .panel-info {
+        width: 100%;
+        padding: 30px;
+        min-height: 180px;
+    }
+
+    .panel-info h1 {
+        font-size: 2.5rem;
+    }
+
+    .panel-info p {
+        font-size: 1rem;
+    }
+
+    .panel-formulario {
+        width: 100%;
+        padding: 30px 20px;
+    }
+
+    .card {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+
+    .panel-info h1 {
+        font-size: 2rem;
+    }
+
+    .card {
+        padding: 25px 20px;
+    }
+}
+
+
+.card-registro {
+    width: 100%;
+    max-width: 650px;
+    min-height: 700px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: white;
+    padding: 35px;
+    border-radius: 15px !important;
+    border: none !important;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,.05), 0 8px 10px -6px rgba(0,0,0,.05) !important;
+    transition: all 0.3s ease-in-out;
+}
+
+.role-cards-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.role-card {
+    border: 1.5px solid #E2E8F0;
+    border-radius: var(--radio);
+    padding: 12px 8px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--color-blanco);
+    transition: all 0.2s ease-in-out;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.role-card:hover {
+    border-color: var(--color-primario);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.role-card.active {
+    border-color: var(--color-primario);
+    background-color: rgba(37, 99, 235, 0.05);
+    transform: none;
+}
+
+.role-card-icon {
+    font-size: 1.25rem;
+    color: var(--color-texto-mutado);
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
+.role-card.active .role-card-icon {
+    color: var(--color-primario);
+}
+
+.role-card-title {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--color-secundario);
+    margin: 0;
+}
+
+.role-card.active .role-card-title {
+    color: var(--color-primario);
+}
+
+.info-box {
+    background-color: var(--color-fondo);
+    border-radius: 10px;
+    padding: 20px;
+    height: 100%;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px dashed #CBD5E1;
+}
+
+.info-box h4 {
+    color: var(--color-secundario);
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-box p {
+    color: var(--color-texto-mutado);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    margin-bottom: 0;
+}
