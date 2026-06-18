@@ -1,5 +1,7 @@
 const db = require("../config/db");
 const { enviarCorreo } = require("../utils/mailer");
+const fs = require("fs");
+const csv = require("csv-parser");
 
 // Registrar una ruta manualmente
 const registrarRutaManual = async (req, res) => {
@@ -247,8 +249,89 @@ const cambiarEstadoRuta = async (req, res) => {
   }
 };
 
+// Cargar rutas masivas desde un archivo CSV
+const cargarRutasCSV = async (req, res) => {
+  const { empresa_id } = req.body;
+  const archivo = req.file;
+
+  if (!empresa_id || !archivo) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Se requiere el ID de la empresa y un archivo CSV." 
+    });
+  }
+
+  const rutasAInsertar = [];
+
+  // Leemos y parseamos el archivo CSV usando un stream 
+  // para no cargar todo el archivo en memoria de una vez
+  fs.createReadStream(archivo.path)
+    .pipe(csv())
+    .on('data', (fila) => {
+      // El parseador convierte cada fila del CSV en un objeto JSON
+      rutasAInsertar.push(fila);
+    })
+    .on('end', async () => {
+      const client = await db.pool.connect();
+      
+      try {
+        await client.query("BEGIN");
+        let rutasInsertadas = 0;
+
+        // Iteramos sobre las rutas parseadas y las insertamos en la base de datos
+        for (const ruta of rutasAInsertar) {
+          // Validamos que la fila traiga lo mínimo necesario
+          if (ruta.nombre_ruta && ruta.origen && ruta.destino && ruta.tipo_servicio && ruta.precio) {
+            
+            const insertQuery = `
+              INSERT INTO rutas_transporte (
+                empresa_id, nombre_ruta, origen, destino, tipo_servicio, 
+                precio, tiempo_estimado, hora_salida, hora_llegada_estimada, 
+                dias_disponibles, capacidad_pasajeros
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            `;
+
+            const valores = [
+              empresa_id,
+              ruta.nombre_ruta,
+              ruta.origen,
+              ruta.destino,
+              ruta.tipo_servicio,
+              parseFloat(ruta.precio),
+              ruta.tiempo_estimado || null,
+              ruta.hora_salida || null,
+              ruta.hora_llegada_estimada || null,
+              ruta.dias_disponibles || null,
+              ruta.capacidad_pasajeros ? parseInt(ruta.capacidad_pasajeros) : null
+            ];
+
+            await client.query(insertQuery, valores);
+            rutasInsertadas++;
+          }
+        }
+
+        await client.query("COMMIT");
+
+        res.status(201).json({
+          success: true,
+          message: `Se procesó el archivo correctamente. ${rutasInsertadas} rutas insertadas.`
+        });
+
+      } catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error procesando CSV:", error);
+        res.status(500).json({ success: false, message: "Error interno al guardar las rutas." });
+      } finally {
+        // Eliminamos el archivo temporal después de procesarlo para liberar espacio en el servidor
+        fs.unlinkSync(archivo.path);
+        client.release();
+      }
+    });
+};
+
 module.exports = {
   registrarRutaManual,
   editarRuta,
-  cambiarEstadoRuta
+  cambiarEstadoRuta,
+  cargarRutasCSV
 };
