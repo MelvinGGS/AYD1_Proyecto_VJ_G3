@@ -1,0 +1,28 @@
+const express = require("express");
+const router = express.Router();
+const operadorServicioController = require("../controllers/operadorServicioController");
+const authMiddleware = require("../middlewares/auth");
+const upload = require("../middlewares/upload");
+
+// Autenticar que sea un opeador activo
+const verificarOperador = (req, res, next) => {
+  if (req.usuario && req.usuario.rol === "operador" && req.usuario.estado === "activo") {
+    next();
+  } else {
+    res.status(403).json({
+      success: false,
+      message: "Acceso denegado. Se requieren permisos de operador activo.",
+      error: { code: "FORBIDDEN" }
+    });
+  }
+};
+
+// Verificación de rol a todas las rutas de operador
+router.use(authMiddleware);
+router.use(verificarOperador);
+
+// Rutas para crear y listar servicios
+router.post("/servicios", upload.array("fotos", 10), operadorServicioController.crearServicio);
+router.get("/servicios", operadorServicioController.listarMisServicios);
+
+module.exports = router;

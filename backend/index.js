@@ -5,6 +5,7 @@ require("dotenv").config();
 
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const operadorRoutes = require("./routes/operadorRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,7 @@ app.use("/uploads", express.static(path.join(__dirname, "./uploads")));
 // Registrar rutas de autenticación
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/operador", operadorRoutes);
 
 // Ruta de estado base del servidor (Health Check)
 app.get("/", (req, res) => {
