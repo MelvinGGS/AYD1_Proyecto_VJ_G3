@@ -44,6 +44,10 @@ function App() {
           <DashboardEmpresa />
         </RutaProtegida>
       } />
+
+      {/* Vista previa de plantillas (sin autenticacion) */}
+      <Route path="/preview/operador" element={<DashboardOperador />} />
+      <Route path="/preview/empresa" element={<DashboardEmpresa />} />
     </Routes>
   );
 }
