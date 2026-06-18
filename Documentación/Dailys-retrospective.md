@@ -1,54 +1,21 @@
-# Dailys Retrospective
+# Sprint Planning 1
 
-## Maria Fernanda Morales Lima
-**Carnet:** 202300378
-**Responsabilidad:** Login y autenticación por roles
+Se organizo para avanzar en la autenticación, el módulo de administración, el envío de correos, la documentación y la base de datos. Cada integrante iniciará con una parte concreta del sistema para mantener el trabajo ordenado y evitar bloqueos entre áreas.
 
-| Aspecto | Resumen |
-| --- | --- |
-| Qué hice bien | Entendí la base del proyecto, me adapté al código existente e implementé el login para los cuatro roles con verificación en dos pasos para el admin. |
-| Qué hice mal | Perdí tiempo por la configuración del entorno, Docker, el archivo `.env`, las rutas y algunos errores con hashes de contraseña. |
-| Qué mejorar | Revisar mejor el entorno antes de empezar y comunicar antes cualquier bloqueo con el equipo. |
+### Integrante 1: Maria Fernanda Morales Lima - 202300378
+Se enfocará en el login y la autenticación por roles, incluyendo la redirección a los dashboards y la verificación en dos pasos para el administrador.
 
-## Bryan Alejandro Anona Paredes
-**Carnet:** 202307272
-**Responsabilidad:** Módulo de correos
+### Integrante 2: Josue David Figueroa Acosta - 202307378
+Comenzará con el módulo de administración, trabajando en la revisión de solicitudes y en las vistas necesarias para gestionar operadores y empresas.
 
-| Aspecto | Resumen |
-| --- | --- |
-| Qué hice bien | Implementé el envío de correos con Nodemailer y lo conecté de forma rápida con el frontend y las APIs del backend. |
-| Qué hice mal | La base de datos quedó con credenciales de admin incorrectas, lo que interrumpió varias pruebas. |
-| Qué mejorar | Compartir mejor el funcionamiento de mis APIs para que el equipo pueda trabajar sin depender de mi disponibilidad. |
+### Integrante 3: Bryan Alejandro Anona Paredes - 202307272
+Iniciará con el sistema de correos, preparando las APIs y el envío de notificaciones para la verificación y el 2FA del administrador.
 
-## Josue David Figueroa Acosta
-**Carnet:** 202307378
-**Responsabilidad:** Módulo de administración
+### Integrante 4: Susana Paola González Contreras - 202000576
+Trabajará primero en la documentación del proyecto y en los prototipos de interfaces para dejar claras las pantallas y el flujo general.
 
-| Aspecto | Resumen |
-| --- | --- |
-| Qué hice bien | Distribuimos bien el trabajo y el proyecto avanzó rápido porque entendimos lo necesario en poco tiempo. |
-| Qué hice mal | Hubo problemas de compatibilidad entre Windows y Linux con el script `.sh` de la base de datos. |
-| Qué mejorar | Mantener mejor comunicación y seguir puliendo la forma de desarrollar el proyecto. |
-
-## Susana Paola González Contreras
-**Carnet:** 202000576
-**Responsabilidad:** Documentación y prototipos de interfaces
-
-| Aspecto | Resumen |
-| --- | --- |
-| Qué hice bien | Entregué a tiempo la documentación y los prototipos solicitados para el sprint. |
-| Qué hice mal | Me tomó tiempo aprender a hacer los prototipos y elegir la herramienta adecuada. |
-| Qué mejorar | Definir herramientas antes de iniciar y estimar mejor los tiempos en el tablero Kanban. |
-
-## Melvin Geovanni García Sumalá
-**Carnet:** 202300712
-**Responsabilidad:** Base de datos y registro de usuarios
-
-| Aspecto | Resumen |
-| --- | --- |
-| Qué hice bien | Organicé el tablero Kanban con las columnas y tarjetas necesarias para dar seguimiento al sprint. |
-| Qué hice mal | Algunas tarjetas no fueron lo bastante específicas y eso generó confusión sobre el alcance. |
-| Qué mejorar | Resolver dudas sobre el enunciado al inicio del sprint para evitar reinterpretaciones durante la implementación. |
+### Integrante 5: Melvin Geovanni García Sumalá - 202300712
+Empezará con la estructura de la base de datos y los registros de usuario, asegurando que cada tipo de cuenta tenga sus campos correctos.
 
 ---
 
@@ -173,5 +140,56 @@ Fecha: 16 Junio 2026
 | **¿Qué haré hoy?** | Revisaré que el tablero Kanban esté actualizado y apoyaré en resolver cualquier duda final sobre el enunciado. |
 | **¿Impedimentos?** | Ninguno por el momento. |
 
+---
 
+# Dailys Retrospective
 
+## Maria Fernanda Morales Lima
+**Carnet:** 202300378
+**Responsabilidad:** Login y autenticación por roles
+
+| Aspecto | Resumen |
+| --- | --- |
+| Qué hice bien | Entendí la base del proyecto, me adapté al código existente e implementé el login para los cuatro roles con verificación en dos pasos para el admin. |
+| Qué hice mal | Perdí tiempo por la configuración del entorno, Docker, el archivo `.env`, las rutas y algunos errores con hashes de contraseña. |
+| Qué mejorar | Revisar mejor el entorno antes de empezar y comunicar antes cualquier bloqueo con el equipo. |
+
+## Bryan Alejandro Anona Paredes
+**Carnet:** 202307272
+**Responsabilidad:** Módulo de correos
+
+| Aspecto | Resumen |
+| --- | --- |
+| Qué hice bien | Implementé el envío de correos con Nodemailer y lo conecté de forma rápida con el frontend y las APIs del backend. |
+| Qué hice mal | La base de datos quedó con credenciales de admin incorrectas, lo que interrumpió varias pruebas. |
+| Qué mejorar | Compartir mejor el funcionamiento de mis APIs para que el equipo pueda trabajar sin depender de mi disponibilidad. |
+
+## Josue David Figueroa Acosta
+**Carnet:** 202307378
+**Responsabilidad:** Módulo de administración
+
+| Aspecto | Resumen |
+| --- | --- |
+| Qué hice bien | Distribuimos bien el trabajo y el proyecto avanzó rápido porque entendimos lo necesario en poco tiempo. |
+| Qué hice mal | Hubo problemas de compatibilidad entre Windows y Linux con el script `.sh` de la base de datos. |
+| Qué mejorar | Mantener mejor comunicación y seguir puliendo la forma de desarrollar el proyecto. |
+
+## Susana Paola González Contreras
+**Carnet:** 202000576
+**Responsabilidad:** Documentación y prototipos de interfaces
+
+| Aspecto | Resumen |
+| --- | --- |
+| Qué hice bien | Entregué a tiempo la documentación y los prototipos solicitados para el sprint. |
+| Qué hice mal | Me tomó tiempo aprender a hacer los prototipos y elegir la herramienta adecuada. |
+| Qué mejorar | Definir herramientas antes de iniciar y estimar mejor los tiempos en el tablero Kanban. |
+
+## Melvin Geovanni García Sumalá
+**Carnet:** 202300712
+**Responsabilidad:** Base de datos y registro de usuarios
+
+| Aspecto | Resumen |
+| --- | --- |
+| Qué hice bien | Organicé el tablero Kanban con las columnas y tarjetas necesarias para dar seguimiento al sprint. |
+| Qué hice mal | Algunas tarjetas no fueron lo bastante específicas y eso generó confusión sobre el alcance. |
+| Qué mejorar | Resolver dudas sobre el enunciado al inicio del sprint para evitar reinterpretaciones durante la implementación. |
