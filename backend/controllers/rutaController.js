@@ -5,8 +5,10 @@ const csv = require("csv-parser");
 
 // Registrar una ruta manualmente
 const registrarRutaManual = async (req, res) => {
+  // Extraemos el ID directamente del token validado por seguridad (req.usuario)
+  const empresa_id = req.usuario.id;
+  
   const {
-    empresa_id, // ID del usuario (empresa) que está creando la ruta
     nombre_ruta,
     origen,
     destino,
@@ -19,25 +21,25 @@ const registrarRutaManual = async (req, res) => {
     capacidad_pasajeros
   } = req.body;
 
-  // Campos obligatorios: empresa_id, nombre_ruta, origen, destino, tipo_servicio, precio
-  if (!empresa_id || !nombre_ruta || !origen || !destino || !tipo_servicio || precio === undefined) {
+  // Campos obligatorios: nombre_ruta, origen, destino, tipo_servicio, precio
+  if (!nombre_ruta || !origen || !destino || !tipo_servicio || precio === undefined) {
     return res.status(400).json({
       success: false,
-      message: "Faltan campos obligatorios (empresa_id, nombre_ruta, origen, destino, tipo_servicio, precio)."
+      message: "Faltan campos obligatorios (nombre_ruta, origen, destino, tipo_servicio, precio)."
     });
   }
 
   try {
     // Primero verificamos que la empresa de transporte exista
     const empresaCheck = await db.pool.query(
-      "SELECT id FROM empresas_transporte WHERE id = $1",
+      "SELECT id FROM usuarios WHERE id = $1 AND rol = 'empresa_transporte'",
       [empresa_id]
     );
 
     if (empresaCheck.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "La empresa de transporte especificada no existe."
+        message: "La empresa de transporte especificada no existe o no tiene permisos."
       });
     }
 
@@ -86,8 +88,9 @@ const registrarRutaManual = async (req, res) => {
 // Editar una ruta existente
 const editarRuta = async (req, res) => {
   const { id } = req.params; // El ID de la ruta viene en la URL
+  const empresa_id = req.usuario.id; // Extraemos el ID del token por seguridad
+
   const {
-    empresa_id, // Para validar que la empresa es dueña de la ruta
     nombre_ruta,
     tipo_servicio,
     precio,
@@ -97,10 +100,6 @@ const editarRuta = async (req, res) => {
     dias_disponibles,
     capacidad_pasajeros
   } = req.body;
-
-  if (!empresa_id) {
-    return res.status(400).json({ success: false, message: "Se requiere el ID de la empresa para autorizar el cambio." });
-  }
 
   try {
     // Primero verificamos que la ruta exista y que pertenezca a la empresa que intenta editarla
@@ -163,12 +162,14 @@ const editarRuta = async (req, res) => {
 // Cambiar estado de una ruta (Cancelar o Suspender) y notificar
 const cambiarEstadoRuta = async (req, res) => {
   const { id } = req.params; // ID de la ruta
-  const { empresa_id, nuevo_estado, motivo_cancelacion } = req.body;
+  const empresa_id = req.usuario.id; // Extraemos el ID del token por seguridad
+  
+  const { nuevo_estado, motivo_cancelacion } = req.body;
 
-  if (!empresa_id || !nuevo_estado) {
+  if (!nuevo_estado) {
     return res.status(400).json({ 
       success: false, 
-      message: "Faltan datos obligatorios (empresa_id, nuevo_estado)." 
+      message: "Falta el dato obligatorio: nuevo_estado." 
     });
   }
 
@@ -192,7 +193,7 @@ const cambiarEstadoRuta = async (req, res) => {
 
     if (rutaCheck.rows.length === 0) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ success: false, message: "Ruta no encontrada." });
+      return res.status(404).json({ success: false, message: "Ruta no encontrada o no pertenece a tu empresa." });
     }
 
     const rutaInfo = rutaCheck.rows[0];
@@ -251,13 +252,13 @@ const cambiarEstadoRuta = async (req, res) => {
 
 // Cargar rutas masivas desde un archivo CSV
 const cargarRutasCSV = async (req, res) => {
-  const { empresa_id } = req.body;
+  const empresa_id = req.usuario.id; // Extraemos el ID del token por seguridad
   const archivo = req.file;
 
-  if (!empresa_id || !archivo) {
+  if (!archivo) {
     return res.status(400).json({ 
       success: false, 
-      message: "Se requiere el ID de la empresa y un archivo CSV." 
+      message: "Se requiere un archivo CSV." 
     });
   }
 
@@ -330,6 +331,8 @@ const cargarRutasCSV = async (req, res) => {
 };
 
 const obtenerRutasEmpresa = async (req, res) => {
+  // Esta ruta se mantiene usando req.params porque es la ruta PÚBLICA que permite
+  // a los clientes consultar las rutas de cualquier empresa para comprar boletos.
   const { empresa_id } = req.params;
   try {
     const { rows } = await require("../config/db").pool.query(

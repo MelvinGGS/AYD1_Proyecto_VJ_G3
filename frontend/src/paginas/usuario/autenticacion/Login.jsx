@@ -52,6 +52,7 @@ function Login() {
 
         localStorage.setItem("token", data.token);
         localStorage.setItem("rol", data.rol);
+        localStorage.setItem("id", data.data.id); // Guardamos el ID aquí para que el Dashboard lo pueda usar
 
         // Redirigir según el rol
         switch (data.rol) {
