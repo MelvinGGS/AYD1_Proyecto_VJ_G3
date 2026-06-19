@@ -4,7 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 
 import Swal from 'sweetalert2';
 
-// Override Swal.fire to be completely static and iconless (no animations, no emojis, no icons)
 const originalFire = Swal.fire;
 Swal.fire = function (...args) {
   let options = args[0];
