@@ -1,6 +1,8 @@
 const db = require("../config/db");
 const bcrypt = require("bcrypt");
 const { enviarCorreo } = require("../utils/mailer");
+//agregando lo de jwt
+const jwt = require("jsonwebtoken");
 
 // Función auxiliar para generar un token de verificación de 6 caracteres alfanuméricos
 const generarTokenVerificacion = () => {
@@ -92,15 +94,22 @@ const verificar2FAAdmin = async (req, res) => {
     // Limpiar el token de la DB por seguridad
     await db.pool.query("UPDATE usuarios SET token_2fa = NULL, token_2fa_exp = NULL WHERE LOWER(email) = $1", [emailLower]);
 
+    // Generar JWT
+    const token = jwt.sign(
+      { id: admin.id, email: admin.email, rol: admin.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
     res.status(200).json({
       success: true,
       message: "Autenticación 2FA exitosa",
-      token: `token-simulado-${admin.id}`,
+      token: token,
       data: {
         id: admin.id,
         email: admin.email,
         rol: admin.rol,
-        token: `token-simulado-${admin.id}`
+        token: token
       }
     });
   } catch (error) {
@@ -232,21 +241,31 @@ const login = async (req, res) => {
 
     // para el operador, para verificar si debe cambiar contraseña temporal
     if ((usuario.rol === "operador" || usuario.rol === "empresa_transporte") && usuario.requiere_cambio_password) {
+      const tokenTemporal = jwt.sign(
+        { id: usuario.id, email: usuario.email, rol: usuario.rol },
+        process.env.JWT_SECRET,
+        { expiresIn: "1h" }
+      );
       return res.status(200).json({
         success: true,
         message: "Debes cambiar tu contraseña temporal.",
         requiere_cambio_password: true,
         rol: usuario.rol,
         email: usuario.email,
-        token: `token-simulado-${usuario.id}`
+        token: tokenTemporal
       });
     }
 
     // esto es para el login exitoso para cliente, operador y empresa
+    const token = jwt.sign(
+      { id: usuario.id, email: usuario.email, rol: usuario.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
     res.status(200).json({
       success: true,
       message: "Inicio de sesión exitoso.",
-      token: `token-simulado-${usuario.id}`,
+      token: token,
       rol: usuario.rol,
       data: {
         id: usuario.id,
