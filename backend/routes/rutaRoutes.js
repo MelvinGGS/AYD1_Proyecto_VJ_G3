@@ -15,4 +15,7 @@ router.patch("/:id/estado", rutaController.cambiarEstadoRuta);
 // Ruta para cargar rutas masivas desde un archivo CSV
 router.post("/csv", uploadCsv.single("archivo_csv"), rutaController.cargarRutasCSV);
 
+// Ruta para obtener las rutas de una empresa
+router.get("/empresa/:empresa_id", rutaController.obtenerRutasEmpresa);
+
 module.exports = router;

@@ -329,9 +329,23 @@ const cargarRutasCSV = async (req, res) => {
     });
 };
 
+const obtenerRutasEmpresa = async (req, res) => {
+  const { empresa_id } = req.params;
+  try {
+    const { rows } = await require("../config/db").pool.query(
+      "SELECT * FROM rutas_transporte WHERE empresa_id = $1 ORDER BY id DESC",
+      [empresa_id]
+    );
+    res.status(200).json({ success: true, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error al obtener rutas." });
+  }
+};
+
 module.exports = {
   registrarRutaManual,
   editarRuta,
   cambiarEstadoRuta,
-  cargarRutasCSV
+  cargarRutasCSV,
+  obtenerRutasEmpresa
 };
