@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../../estilos/topNavbar.css";
 
@@ -6,9 +6,135 @@ function DashboardEmpresa() {
   const navigate = useNavigate();
   const [vista, setVista] = useState("inicio");
 
+  const empresaId = localStorage.getItem("usuario_id") || localStorage.getItem("id");
+
+  const [rutas, setRutas] = useState([]);
+  const [archivoCSV, setArchivoCSV] = useState(null);
+  const [rutaEditandoId, setRutaEditandoId] = useState(null);
+  const [formularioRuta, setFormularioRuta] = useState({
+    nombre_ruta: "", origen: "", destino: "", precio: "", tiempo_estimado: ""
+  });
+
+  // ESTADOS PARA EL MODAL DE CANCELACIÓN
+  const [modalCancelacion, setModalCancelacion] = useState(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState("");
+
+  useEffect(() => {
+    if (vista === "rutas" && empresaId) {
+      cargarRutas();
+    }
+  }, [vista]);
+
+  const cargarRutas = async () => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/rutas/empresa/${empresaId}`);
+      const data = await res.json();
+      if (data.success) setRutas(data.data);
+    } catch (error) {
+      console.error("Error al cargar rutas", error);
+    }
+  };
+
+  const manejarEnvioManual = async (e) => {
+    e.preventDefault();
+    const url = rutaEditandoId 
+      ? `http://localhost:3000/api/rutas/${rutaEditandoId}` 
+      : `http://localhost:3000/api/rutas/manual`;
+    
+    const metodo = rutaEditandoId ? "PUT" : "POST";
+
+    try {
+      const res = await fetch(url, {
+        method: metodo,
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        // YA NO ENVIAMOS empresa_id AQUÍ
+        body: JSON.stringify({
+          tipo_servicio: "Estandar",
+          ...formularioRuta
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        setFormularioRuta({ nombre_ruta: "", origen: "", destino: "", precio: "", tiempo_estimado: "" });
+        setRutaEditandoId(null);
+        cargarRutas();
+      } else {
+        alert("Error: " + data.message);
+      }
+    } catch (error) {
+      alert("Error de conexión al guardar la ruta.");
+    }
+  };
+
+  const manejarSubidaCSV = async () => {
+    if (!archivoCSV) return alert("Por favor selecciona un archivo CSV.");
+    
+    const formData = new FormData();
+    formData.append("archivo_csv", archivoCSV);
+    // YA NO AGREGAMOS empresa_id AL FORMDATA
+
+    try {
+      const res = await fetch("http://localhost:3000/api/rutas/csv", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        setArchivoCSV(null);
+        cargarRutas();
+      } else {
+        alert("Error: " + data.message);
+      }
+    } catch (error) {
+      alert("Error de conexión al subir CSV.");
+    }
+  };
+
+  const cambiarEstadoRuta = async (idRuta, nuevoEstado, motivo = "") => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/rutas/${idRuta}/estado`, {
+        method: "PATCH",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        // YA NO ENVIAMOS empresa_id AQUÍ
+        body: JSON.stringify({ nuevo_estado: nuevoEstado, motivo_cancelacion: motivo })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        cargarRutas();
+      }
+    } catch (error) {
+      alert("Error al cambiar estado.");
+    }
+  };
+
+  const prepararEdicion = (ruta) => {
+    setRutaEditandoId(ruta.id);
+    setFormularioRuta({
+      nombre_ruta: ruta.nombre_ruta,
+      origen: ruta.origen,
+      destino: ruta.destino,
+      precio: ruta.precio,
+      tiempo_estimado: ruta.tiempo_estimado || ""
+    });
+  };
+
   const cerrarSesion = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("rol");
+    localStorage.removeItem("usuario_id");
+    localStorage.removeItem("id");
     navigate("/");
   };
 
@@ -130,57 +256,136 @@ function DashboardEmpresa() {
                 <h2 className="dashboard-card-title">Carga Masiva de Rutas/Flota</h2>
                 <div className="mb-3">
                   <label className="form-label">Archivo CSV de Rutas</label>
-                  <input type="file" className="form-control" accept=".csv" />
+                  <input 
+                    type="file" 
+                    className="form-control" 
+                    accept=".csv" 
+                    onChange={(e) => setArchivoCSV(e.target.files[0])}
+                  />
                 </div>
-                <button className="btn btn-secondary w-100">Cargar Archivo CSV</button>
+                <button className="btn btn-secondary w-100" onClick={manejarSubidaCSV}>
+                  Cargar Archivo CSV
+                </button>
               </div>
 
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Registrar Ruta Manualmente</h2>
+                <h2 className="dashboard-card-title">
+                  {rutaEditandoId ? "Editar Ruta" : "Registrar Ruta Manualmente"}
+                </h2>
                 <div className="mb-3">
                   <label className="form-label">Nombre de la Ruta</label>
-                  <input type="text" className="form-control" placeholder="Ej. Capital - Xela" />
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    placeholder="Ej. Capital - Xela" 
+                    value={formularioRuta.nombre_ruta}
+                    onChange={(e) => setFormularioRuta({...formularioRuta, nombre_ruta: e.target.value})}
+                  />
                 </div>
                 <div className="row">
                   <div className="col-6 mb-3">
                     <label className="form-label">Origen</label>
-                    <input type="text" className="form-control" />
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={formularioRuta.origen}
+                      onChange={(e) => setFormularioRuta({...formularioRuta, origen: e.target.value})}
+                    />
                   </div>
                   <div className="col-6 mb-3">
                     <label className="form-label">Destino</label>
-                    <input type="text" className="form-control" />
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={formularioRuta.destino}
+                      onChange={(e) => setFormularioRuta({...formularioRuta, destino: e.target.value})}
+                    />
                   </div>
                 </div>
                 <div className="row">
                   <div className="col-6 mb-3">
                     <label className="form-label">Precio Boleto</label>
-                    <input type="number" className="form-control" />
+                    <input 
+                      type="number" 
+                      className="form-control" 
+                      value={formularioRuta.precio}
+                      onChange={(e) => setFormularioRuta({...formularioRuta, precio: e.target.value})}
+                    />
                   </div>
                   <div className="col-6 mb-3">
                     <label className="form-label">Tiempo Estimado</label>
-                    <input type="text" className="form-control" placeholder="Ej. 4 horas" />
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Ej. 4 horas" 
+                      value={formularioRuta.tiempo_estimado}
+                      onChange={(e) => setFormularioRuta({...formularioRuta, tiempo_estimado: e.target.value})}
+                    />
                   </div>
                 </div>
-                <button className="btn btn-primary w-100">Registrar Ruta</button>
+                <button className="btn btn-primary w-100" onClick={manejarEnvioManual}>
+                  {rutaEditandoId ? "Guardar Cambios" : "Registrar Ruta"}
+                </button>
+                {rutaEditandoId && (
+                  <button 
+                    type="button" 
+                    className="btn btn-light w-100 mt-2"
+                    onClick={() => {
+                      setRutaEditandoId(null);
+                      setFormularioRuta({ nombre_ruta: "", origen: "", destino: "", precio: "", tiempo_estimado: "" });
+                    }}
+                  >
+                    Cancelar Edición
+                  </button>
+                )}
               </div>
             </div>
             <div className="col-md-7">
               <div className="dashboard-card-custom">
                 <h2 className="dashboard-card-title">Rutas de Transporte</h2>
                 <div className="list-group">
-                  <div className="list-group-item p-3 mb-2 border rounded">
-                    <div className="d-flex w-100 justify-content-between">
-                      <h5 className="mb-1 fw-bold">Ruta Capital - Xela</h5>
-                      <span className="badge bg-success">Activa</span>
+                  {rutas.length === 0 ? (
+                    <div className="list-group-item p-3 mb-2 border rounded text-center">
+                      <p className="text-muted mb-0">No hay rutas registradas.</p>
                     </div>
-                    <p className="mb-1 text-muted">Origen: Ciudad de Guatemala. Destino: Quetzaltenango.</p>
-                    <small className="text-muted">Precio: Q75.00. Tiempo: 4 horas.</small>
-                    <div className="mt-2">
-                      <button className="btn btn-sm btn-outline-secondary me-2">Editar</button>
-                      <button className="btn btn-sm btn-outline-warning me-2">Suspender temporalmente</button>
-                      <button className="btn btn-sm btn-outline-danger">Cancelar por emergencia</button>
-                    </div>
-                  </div>
+                  ) : (
+                    rutas.map((ruta) => (
+                      <div key={ruta.id} className="list-group-item p-3 mb-2 border rounded">
+                        <div className="d-flex w-100 justify-content-between">
+                          <h5 className="mb-1 fw-bold">{ruta.nombre_ruta}</h5>
+                          <span className={`badge ${ruta.estado === 'activa' ? 'bg-success' : ruta.estado === 'suspendida' ? 'bg-warning' : 'bg-danger'}`}>
+                            {ruta.estado.charAt(0).toUpperCase() + ruta.estado.slice(1)}
+                          </span>
+                        </div>
+                        <p className="mb-1 text-muted">Origen: {ruta.origen}. Destino: {ruta.destino}.</p>
+                        <small className="text-muted">Precio: Q{ruta.precio}. Tiempo: {ruta.tiempo_estimado || 'N/A'}.</small>
+                        <div className="mt-2">
+                          <button 
+                            className="btn btn-sm btn-outline-secondary me-2"
+                            onClick={() => prepararEdicion(ruta)}
+                          >
+                            Editar
+                          </button>
+                          {ruta.estado !== 'suspendida' && (
+                            <button 
+                              className="btn btn-sm btn-outline-warning me-2"
+                              onClick={() => cambiarEstadoRuta(ruta.id, "suspendida")}
+                            >
+                              Suspender temporalmente
+                            </button>
+                          )}
+                          {ruta.estado !== 'cancelada' && (
+                            <button 
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => setModalCancelacion(ruta.id)}
+                            >
+                              Cancelar por emergencia
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -309,6 +514,49 @@ function DashboardEmpresa() {
           </div>
         )}
       </div>
+
+      {/* COMPONENTE MODAL DE CANCELACIÓN */}
+      {modalCancelacion && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+          backgroundColor: "rgba(0, 0, 0, 0.6)", zIndex: 9999,
+          display: "flex", justifyContent: "center", alignItems: "center"
+        }}>
+          <div className="card p-4 shadow-lg" style={{ width: "90%", maxWidth: "450px", borderRadius: "12px", border: "none" }}>
+            <h4 className="fw-bold text-danger mb-3">Cancelar Ruta por Emergencia</h4>
+            <p className="text-muted mb-3" style={{ fontSize: "14px" }}>
+              Al cancelar esta ruta, se notificará inmediatamente por correo electrónico a todos los clientes con reservaciones activas. Por favor, indica el motivo:
+            </p>
+            <textarea 
+              className="form-control mb-4" 
+              rows="3" 
+              placeholder="Ej. Condiciones climáticas adversas, bloqueo en carretera..."
+              value={motivoCancelacion}
+              onChange={(e) => setMotivoCancelacion(e.target.value)}
+              autoFocus
+            ></textarea>
+            <div className="d-flex justify-content-end">
+              <button 
+                className="btn btn-light me-2" 
+                onClick={() => { setModalCancelacion(null); setMotivoCancelacion(""); }}
+              >
+                Mantener Ruta
+              </button>
+              <button 
+                className="btn btn-danger" 
+                onClick={() => {
+                  if (!motivoCancelacion.trim()) return alert("Por favor, ingresa un motivo para notificar a los clientes.");
+                  cambiarEstadoRuta(modalCancelacion, "cancelada", motivoCancelacion);
+                  setModalCancelacion(null);
+                  setMotivoCancelacion("");
+                }}
+              >
+                Confirmar Cancelación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
