@@ -6,6 +6,7 @@ require("dotenv").config();
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const operadorRoutes = require("./routes/operadorRoutes");
+const rutaRoutes = require('./routes/rutaRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,9 @@ app.use("/uploads", express.static(path.join(__dirname, "./uploads")));
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/operador", operadorRoutes);
+
+// Registrar rutas de rutas de transporte
+app.use('/api/rutas', rutaRoutes);
 
 // Ruta de estado base del servidor (Health Check)
 app.get("/", (req, res) => {
