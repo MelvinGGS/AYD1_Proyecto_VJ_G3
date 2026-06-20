@@ -172,6 +172,163 @@ const enviarCuponPorCorreo = async (req, res) => {
     }
 };
 
+// para los reportes recibidos 
+const verReportesRecibidos = async (req, res) => {
+    const empresaId = req.usuario.id;
+    try {
+        const { rows } = await db.pool.query(
+            `SELECT 
+        r.id,
+        r.motivo,
+        r.descripcion,
+        r.estado,
+        r.tipo_servicio,
+        r.created_at,
+        u.email AS cliente_email
+       FROM reportes r
+       INNER JOIN usuarios u ON u.id = r.reportado_por
+       WHERE r.reportado_usuario = $1
+       ORDER BY r.created_at DESC`,
+            [empresaId]
+        );
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error("Error al obtener reportes:", error);
+        res.status(500).json({ success: false, message: "Error al obtener reportes.", error: { details: error.message } });
+    }
+};
+
+// para los reportes
+// Reporte de ganancias
+const reporteGanancias = async (req, res) => {
+    const empresaId = req.usuario.id;
+    try {
+        const { rows } = await db.pool.query(
+            `SELECT 
+        rt.nombre_ruta,
+        rt.origen,
+        rt.destino,
+        COUNT(r.id) AS total_reservaciones,
+        SUM(r.precio_total) AS ingresos_totales,
+        SUM(r.ganancia_proveedor) AS ganancias_empresa,
+        SUM(r.comision_plataforma) AS comision_plataforma
+       FROM rutas_transporte rt
+       LEFT JOIN reservaciones r ON r.ruta_transporte_id = rt.id
+         AND r.estado NOT IN ('cancelado', 'reembolsado')
+       WHERE rt.empresa_id = $1
+       GROUP BY rt.id, rt.nombre_ruta, rt.origen, rt.destino
+       ORDER BY ganancias_empresa DESC NULLS LAST`,
+            [empresaId]
+        );
+
+        const totales = rows.reduce((acc, r) => ({
+            total_reservaciones: acc.total_reservaciones + parseInt(r.total_reservaciones || 0),
+            ingresos_totales: acc.ingresos_totales + parseFloat(r.ingresos_totales || 0),
+            ganancias_empresa: acc.ganancias_empresa + parseFloat(r.ganancias_empresa || 0),
+            comision_plataforma: acc.comision_plataforma + parseFloat(r.comision_plataforma || 0)
+        }), { total_reservaciones: 0, ingresos_totales: 0, ganancias_empresa: 0, comision_plataforma: 0 });
+
+        res.json({ success: true, data: rows, totales });
+    } catch (error) {
+        console.error("Error en reporte ganancias:", error);
+        res.status(500).json({ success: false, message: "Error al obtener reporte de ganancias.", error: { details: error.message } });
+    }
+};
+
+// Historial de servicios contratados
+const historialServicios = async (req, res) => {
+    const empresaId = req.usuario.id;
+    try {
+        const { rows } = await db.pool.query(
+            `SELECT 
+        r.id,
+        r.estado,
+        r.fecha_inicio,
+        r.fecha_fin,
+        r.precio_total,
+        r.ganancia_proveedor,
+        r.created_at,
+        rt.nombre_ruta,
+        rt.origen,
+        rt.destino,
+        u.email AS cliente_email
+       FROM reservaciones r
+       INNER JOIN rutas_transporte rt ON rt.id = r.ruta_transporte_id
+       INNER JOIN clientes c ON c.id = r.cliente_id
+       INNER JOIN usuarios u ON u.id = c.id
+       WHERE rt.empresa_id = $1
+       ORDER BY r.created_at DESC`,
+            [empresaId]
+        );
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error("Error en historial servicios:", error);
+        res.status(500).json({ success: false, message: "Error al obtener historial.", error: { details: error.message } });
+    }
+};
+
+// Reporte de calificaciones y reseñas
+const reporteCalificaciones = async (req, res) => {
+    const empresaId = req.usuario.id;
+    try {
+        const { rows } = await db.pool.query(
+            `SELECT 
+        c.id,
+        c.puntuacion,
+        c.comentario,
+        c.created_at,
+        rt.nombre_ruta,
+        u.email AS cliente_email
+       FROM calificaciones c
+       INNER JOIN rutas_transporte rt ON rt.id = c.ruta_transporte_id
+       INNER JOIN clientes cl ON cl.id = c.cliente_id
+       INNER JOIN usuarios u ON u.id = cl.id
+       WHERE rt.empresa_id = $1
+       ORDER BY c.created_at DESC`,
+            [empresaId]
+        );
+
+        const promedio = rows.length > 0
+            ? (rows.reduce((acc, r) => acc + r.puntuacion, 0) / rows.length).toFixed(1)
+            : 0;
+
+        res.json({ success: true, data: rows, promedio_general: promedio });
+    } catch (error) {
+        console.error("Error en reporte calificaciones:", error);
+        res.status(500).json({ success: false, message: "Error al obtener calificaciones.", error: { details: error.message } });
+    }
+};
+
+// Reporte del estado de las rutas
+const reporteEstadoRutas = async (req, res) => {
+    const empresaId = req.usuario.id;
+    try {
+        const { rows } = await db.pool.query(
+            `SELECT 
+        rt.id,
+        rt.nombre_ruta,
+        rt.origen,
+        rt.destino,
+        rt.precio,
+        rt.estado,
+        rt.tiempo_estimado,
+        COUNT(r.id) AS total_reservaciones,
+        AVG(cal.puntuacion) AS calificacion_promedio
+       FROM rutas_transporte rt
+       LEFT JOIN reservaciones r ON r.ruta_transporte_id = rt.id
+       LEFT JOIN calificaciones cal ON cal.ruta_transporte_id = rt.id
+       WHERE rt.empresa_id = $1
+       GROUP BY rt.id
+       ORDER BY rt.estado, rt.nombre_ruta`,
+            [empresaId]
+        );
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error("Error en reporte estado rutas:", error);
+        res.status(500).json({ success: false, message: "Error al obtener estado de rutas.", error: { details: error.message } });
+    }
+};
+
 module.exports = {
     obtenerPerfil,
     solicitarCambioPerfil,
@@ -179,5 +336,10 @@ module.exports = {
     crearCupon,
     listarCupones,
     desactivarCupon,
-    enviarCuponPorCorreo
+    enviarCuponPorCorreo,
+    verReportesRecibidos,
+    reporteGanancias,
+    historialServicios,
+    reporteCalificaciones,
+    reporteEstadoRutas
 };

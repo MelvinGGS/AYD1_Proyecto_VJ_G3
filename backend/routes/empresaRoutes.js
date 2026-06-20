@@ -16,4 +16,12 @@ router.post("/cupones", empresaController.crearCupon);
 router.patch("/cupones/:id/desactivar", empresaController.desactivarCupon);
 router.post("/cupones/:id/enviar", empresaController.enviarCuponPorCorreo);
 
+// reporte recibidos
+router.get("/reportes", empresaController.verReportesRecibidos);
+// reporte de la empresa
+router.get("/reportes/ganancias", empresaController.reporteGanancias);
+router.get("/reportes/historial-servicios", empresaController.historialServicios);
+router.get("/reportes/calificaciones", empresaController.reporteCalificaciones);
+router.get("/reportes/estado-rutas", empresaController.reporteEstadoRutas);
+
 module.exports = router;
