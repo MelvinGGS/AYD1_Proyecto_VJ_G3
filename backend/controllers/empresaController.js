@@ -310,21 +310,18 @@ const reporteEstadoRutas = async (req, res) => {
     try {
         const { rows } = await db.pool.query(
             `SELECT 
-        rt.id,
-        rt.nombre_ruta,
-        rt.origen,
-        rt.destino,
-        rt.precio,
-        rt.estado,
-        rt.tiempo_estimado,
-        COUNT(r.id) AS total_reservaciones,
-        AVG(cal.puntuacion) AS calificacion_promedio
-       FROM rutas_transporte rt
-       LEFT JOIN reservaciones r ON r.ruta_transporte_id = rt.id
-       LEFT JOIN calificaciones cal ON cal.ruta_transporte_id = rt.id
-       WHERE rt.empresa_id = $1
-       GROUP BY rt.id
-       ORDER BY rt.estado, rt.nombre_ruta`,
+            rt.id,
+            rt.nombre_ruta,
+            rt.origen,
+            rt.destino,
+            rt.precio,
+            rt.estado,
+            rt.tiempo_estimado,
+            (SELECT COUNT(*) FROM reservaciones r WHERE r.ruta_transporte_id = rt.id) AS total_reservaciones,
+            (SELECT AVG(cal.puntuacion) FROM calificaciones cal WHERE cal.ruta_transporte_id = rt.id) AS calificacion_promedio
+            FROM rutas_transporte rt
+            WHERE rt.empresa_id = $1
+            ORDER BY rt.estado, rt.nombre_ruta`,
             [empresaId]
         );
         res.json({ success: true, data: rows });

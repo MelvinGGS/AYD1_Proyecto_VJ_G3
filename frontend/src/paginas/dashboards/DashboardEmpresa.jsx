@@ -979,7 +979,7 @@ function DashboardEmpresa() {
                         <div className="d-flex justify-content-between align-items-center">
                           <div>
                             <h6 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{r.nombre_ruta}</h6>
-                            <small style={{ color: "var(--color-texto-mutado)" }}>{r.origen} → {r.destino}</small>
+                            <small style={{ color: "var(--color-texto-mutado)" }}>{r.origen} --- {r.destino}</small>
                           </div>
                           <div className="text-end">
                             <p className="fw-bold mb-0" style={{ color: "var(--color-primario)" }}>Q{parseFloat(r.ganancias_empresa || 0).toFixed(2)}</p>
@@ -1005,7 +1005,7 @@ function DashboardEmpresa() {
                       <div className="d-flex justify-content-between align-items-start">
                         <div>
                           <h6 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{s.nombre_ruta}</h6>
-                          <small style={{ color: "var(--color-texto-mutado)" }}>{s.origen} → {s.destino}</small>
+                          <small style={{ color: "var(--color-texto-mutado)" }}>{s.origen} --- {s.destino}</small>
                           <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginTop: "4px", marginBottom: 0 }}>
                             Cliente: {s.cliente_email}
                           </p>
@@ -1050,7 +1050,7 @@ function DashboardEmpresa() {
                           <div key={c.id} className="p-3 mb-2 rounded" style={{ border: "1px solid #E2E8F0" }}>
                             <div className="d-flex justify-content-between mb-1">
                               <span className="fw-bold" style={{ color: "var(--color-secundario)", fontSize: "13px" }}>{c.cliente_email}</span>
-                              <span style={{ color: "var(--color-primario)", fontWeight: "700" }}>{"".repeat(c.puntuacion)}{"☆".repeat(5 - c.puntuacion)}</span>
+                              <span style={{ color: "var(--color-primario)", fontWeight: "700" }}>{"".repeat(c.puntuacion)}{"".repeat(5 - c.puntuacion)}</span>
                             </div>
                             <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px" }}>{c.nombre_ruta}</p>
                             {c.comentario && <p style={{ fontSize: "13px", color: "var(--color-secundario)", margin: 0 }}>{c.comentario}</p>}
@@ -1076,7 +1076,7 @@ function DashboardEmpresa() {
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
                           <h6 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{r.nombre_ruta}</h6>
-                          <small style={{ color: "var(--color-texto-mutado)" }}>{r.origen} → {r.destino} · Q{r.precio} · {r.tiempo_estimado || "N/A"}</small>
+                          <small style={{ color: "var(--color-texto-mutado)" }}>{r.origen} --- {r.destino} · Q{r.precio} · {r.tiempo_estimado || "N/A"}</small>
                           <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", margin: "4px 0 0" }}>
                             {r.total_reservaciones} reservaciones · {r.calificacion_promedio ? parseFloat(r.calificacion_promedio).toFixed(1) : "Sin calificaciones"}
                           </p>
@@ -1251,7 +1251,7 @@ function DashboardEmpresa() {
                           {c.tipo_descuento === "porcentaje" ? `${c.valor_descuento}% OFF` : `Q${c.valor_descuento} OFF`}
                         </span>
                         <span style={{ color: "var(--color-texto-mutado)" }}>
-                          {new Date(c.fecha_inicio).toLocaleDateString()} → {new Date(c.fecha_fin).toLocaleDateString()}
+                          {new Date(c.fecha_inicio).toLocaleDateString()} --- {new Date(c.fecha_fin).toLocaleDateString()}
                         </span>
                       </div>
 
