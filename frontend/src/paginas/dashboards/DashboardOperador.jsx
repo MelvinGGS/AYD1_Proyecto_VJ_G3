@@ -268,6 +268,92 @@ function DashboardOperador() {
     }
   };
 
+  const manejarCambioEstadoServicio = async (servicioId, estadoActual) => {
+    const esSuspender = estadoActual === "activo";
+
+    let motivo = "";
+    if (esSuspender) {
+      const { value: text, isDismissed } = await Swal.fire({
+        title: "Suspender servicio",
+        input: "textarea",
+        inputLabel: "Escribe el motivo de la suspensión (obligatorio)",
+        inputPlaceholder: "Ej. Mantenimiento del vehículo, vacaciones...",
+        showCancelButton: true,
+        confirmButtonColor: "#F59E0B",
+        cancelButtonColor: "#64748B",
+        confirmButtonText: "Suspender",
+        cancelButtonText: "Cancelar",
+        inputValidator: (value) => {
+          if (!value || !value.trim()) {
+            return "Debes escribir un motivo para suspender el servicio.";
+          }
+        }
+      });
+
+      if (isDismissed || !text) {
+        return;
+      }
+      motivo = text;
+    } else {
+      const confirmacion = await Swal.fire({
+        title: "¿Reactivar servicio?",
+        text: "El servicio volverá a estar visible para los clientes.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonColor: "#10B981",
+        cancelButtonColor: "#64748B",
+        confirmButtonText: "Sí, reactivar",
+        cancelButtonText: "Cancelar"
+      });
+
+      if (!confirmacion.isConfirmed) {
+        return;
+      }
+    }
+
+    setCargando(true);
+    setError("");
+    setExito("");
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/servicios/${servicioId}/estado`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          estado: esSuspender ? "suspendido" : "activo",
+          motivo: esSuspender ? motivo : undefined
+        })
+      });
+
+      const data = await respuesta.json();
+      if (respuesta.ok) {
+        setExito(`Servicio ${esSuspender ? "suspendido" : "activado"} exitosamente.`);
+        cargarServicios();
+        if (editandoId === servicioId) {
+          limpiarFormulario();
+        }
+      } else {
+        setError(data.message || "Error al cambiar el estado del servicio.");
+        Swal.fire({
+          title: "Error",
+          text: data.message || "No se pudo cambiar el estado del servicio.",
+          icon: "error"
+        });
+      }
+    } catch (err) {
+      setError("Error al conectar con el servidor.");
+      Swal.fire({
+        title: "Error",
+        text: "Error al conectar con el servidor.",
+        icon: "error"
+      });
+    } finally {
+      setCargando(false);
+    }
+  };
+
   const cerrarSesion = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("rol");
@@ -619,8 +705,12 @@ function DashboardOperador() {
                           >
                             Editar
                           </button>
-                          <button className="btn btn-sm btn-outline-warning" disabled>
-                            Suspender temporalmente
+                          <button
+                            className={`btn btn-sm ${serv.estado === "activo" ? "btn-outline-warning" : "btn-outline-success"}`}
+                            onClick={() => manejarCambioEstadoServicio(serv.id, serv.estado)}
+                            disabled={cargando}
+                          >
+                            {serv.estado === "activo" ? "Suspender temporalmente" : "Reactivar"}
                           </button>
                           <button
                             className="btn btn-sm btn-outline-danger"

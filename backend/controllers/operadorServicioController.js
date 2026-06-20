@@ -97,20 +97,14 @@ const crearServicio = async (req, res) => {
 };
 
 const listarMisServicios = async (req, res) => {
-  const estadoFiltro = req.query.estado || "activo";
+  const estadoFiltro = req.query.estado;
   const pagina = parseInt(req.query.pagina || "1");
   const porPagina = parseInt(req.query.por_pagina || "10");
   const offset = (pagina - 1) * porPagina;
 
   try {
-    const totalRes = await db.pool.query(
-      "SELECT COUNT(*) FROM servicios_envio WHERE operador_id = $1 AND estado = $2",
-      [req.usuario.id, estadoFiltro]
-    );
-    const totalItems = parseInt(totalRes.rows[0].count);
-    const totalPaginas = Math.ceil(totalItems / porPagina) || 1;
-
-    const query = `
+    let totalQuery = "SELECT COUNT(*) FROM servicios_envio WHERE operador_id = $1 AND estado != 'eliminado'";
+    let selectQuery = `
       SELECT s.id, s.nombre_servicio, s.descripcion, s.zona_cobertura,
              s.capacidad_carga_kg, s.precio_envio, s.estado, s.created_at,
              s.horario_disponible,
@@ -124,17 +118,42 @@ const listarMisServicios = async (req, res) => {
                ) f
              ) AS fotos
       FROM servicios_envio s
-      WHERE s.operador_id = $1 AND s.estado = $2
+      WHERE s.operador_id = $1 AND s.estado != 'eliminado'
       ORDER BY s.created_at DESC
-      LIMIT $3 OFFSET $4
+      LIMIT $2 OFFSET $3
     `;
+    let totalParams = [req.usuario.id];
+    let selectParams = [req.usuario.id, porPagina, offset];
 
-    const { rows } = await db.pool.query(query, [
-      req.usuario.id,
-      estadoFiltro,
-      porPagina,
-      offset
-    ]);
+    if (estadoFiltro) {
+      totalQuery = "SELECT COUNT(*) FROM servicios_envio WHERE operador_id = $1 AND estado = $2";
+      selectQuery = `
+        SELECT s.id, s.nombre_servicio, s.descripcion, s.zona_cobertura,
+               s.capacidad_carga_kg, s.precio_envio, s.estado, s.created_at,
+               s.horario_disponible,
+               s.calificacion_promedio, s.total_calificaciones,
+               (
+                 SELECT json_agg(json_build_object('url_foto', f.url_foto, 'orden', f.orden))
+                 FROM (
+                   SELECT url_foto, orden FROM fotos_servicio
+                   WHERE servicio_id = s.id
+                   ORDER BY orden ASC
+                 ) f
+               ) AS fotos
+        FROM servicios_envio s
+        WHERE s.operador_id = $1 AND s.estado = $2
+        ORDER BY s.created_at DESC
+        LIMIT $3 OFFSET $4
+      `;
+      totalParams.push(estadoFiltro);
+      selectParams = [req.usuario.id, estadoFiltro, porPagina, offset];
+    }
+
+    const totalRes = await db.pool.query(totalQuery, totalParams);
+    const totalItems = parseInt(totalRes.rows[0].count);
+    const totalPaginas = Math.ceil(totalItems / porPagina) || 1;
+
+    const { rows } = await db.pool.query(selectQuery, selectParams);
 
     const items = rows.map(r => ({
       id: r.id,
@@ -393,9 +412,100 @@ const eliminarServicio = async (req, res) => {
   }
 };
 
+const cambiarEstadoServicio = async (req, res) => {
+  const { id } = req.params;
+  const { estado, motivo } = req.body;
+
+  if (estado !== "activo" && estado !== "suspendido") {
+    return res.status(400).json({
+      success: false,
+      message: "El estado proporcionado no es valido (debe ser activo o suspendido).",
+      error: { code: "VALIDATION_ERROR" }
+    });
+  }
+
+  if (estado === "suspendido" && (!motivo || !motivo.trim())) {
+    return res.status(400).json({
+      success: false,
+      message: "Se requiere un motivo para suspender el servicio.",
+      error: { code: "VALIDATION_ERROR" }
+    });
+  }
+
+  try {
+    const checkRes = await db.pool.query(
+      "SELECT id, operador_id, estado FROM servicios_envio WHERE id = $1",
+      [id]
+    );
+
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Servicio no encontrado.",
+        error: { code: "SERVICE_NOT_FOUND" }
+      });
+    }
+
+    const servicioDb = checkRes.rows[0];
+    if (servicioDb.operador_id !== req.usuario.id) {
+      return res.status(403).json({
+        success: false,
+        message: "No tienes permisos para modificar el estado de este servicio.",
+        error: { code: "FORBIDDEN" }
+      });
+    }
+
+    if (servicioDb.estado === "eliminado") {
+      return res.status(400).json({
+        success: false,
+        message: "No se puede cambiar el estado de un servicio eliminado.",
+        error: { code: "VALIDATION_ERROR" }
+      });
+    }
+
+    // Actualizar el estado
+    const updateRes = await db.pool.query(
+      "UPDATE servicios_envio SET estado = $1, updated_at = NOW() WHERE id = $2 RETURNING id, estado",
+      [estado, id]
+    );
+
+    // Registrar en log_actividad
+    await db.pool.query(
+      `INSERT INTO log_actividad (usuario_id, accion, descripcion, entidad_tipo, entidad_id, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        req.usuario.id,
+        estado === "suspendido" ? "suspender_servicio" : "activar_servicio",
+        `Servicio ${estado === "suspendido" ? "suspendido" : "activado"}. Motivo: ${motivo || "N/A"}`,
+        "servicio",
+        id,
+        JSON.stringify({ motivo: motivo || null })
+      ]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Servicio ${estado === "suspendido" ? "suspendido temporalmente" : "activado"} exitosamente.`,
+      data: {
+        id: updateRes.rows[0].id,
+        estado: updateRes.rows[0].estado
+      }
+    });
+
+  } catch (error) {
+    console.error("Error al cambiar estado del servicio:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error interno al cambiar el estado del servicio.",
+      error: { code: "INTERNAL_ERROR", details: error.message }
+    });
+  }
+};
+
 module.exports = {
   crearServicio,
   listarMisServicios,
   actualizarServicio,
-  eliminarServicio
+  eliminarServicio,
+  cambiarEstadoServicio
 };
