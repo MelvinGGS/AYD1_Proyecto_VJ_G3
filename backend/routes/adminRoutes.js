@@ -17,4 +17,8 @@ router.patch("/solicitudes/empresas/:id/rechazar", adminController.rechazarEmpre
 
 router.post("/administradores", adminController.registrarAdministrador);
 
+//para los cupones
+router.get("/solicitudes/cambio-perfil", adminController.listarSolicitudesCambioPerfil);
+router.patch("/solicitudes/cambio-perfil/:id/resolver", adminController.resolverCambioPerfil);
+
 module.exports = router;
