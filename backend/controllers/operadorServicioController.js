@@ -173,7 +173,152 @@ const listarMisServicios = async (req, res) => {
   }
 };
 
+const actualizarServicio = async (req, res) => {
+  const { id } = req.params;
+  const {
+    nombre_servicio,
+    descripcion,
+    zona_cobertura,
+    capacidad_carga_kg,
+    precio_envio,
+    horario_disponible
+  } = req.body;
+
+  try {
+    const checkRes = await db.pool.query(
+      "SELECT id, operador_id FROM servicios_envio WHERE id = $1",
+      [id]
+    );
+
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Servicio no encontrado.",
+        error: { code: "SERVICE_NOT_FOUND" }
+      });
+    }
+
+    const servicioDb = checkRes.rows[0];
+    if (servicioDb.operador_id !== req.usuario.id) {
+      return res.status(403).json({
+        success: false,
+        message: "No tienes permisos para modificar este servicio.",
+        error: { code: "FORBIDDEN" }
+      });
+    }
+
+    const fieldsToUpdate = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (nombre_servicio !== undefined) {
+      if (!nombre_servicio) {
+        return res.status(400).json({
+          success: false,
+          message: "El nombre del servicio es obligatorio.",
+          error: { code: "VALIDATION_ERROR" }
+        });
+      }
+      fieldsToUpdate.push(`nombre_servicio = $${paramIndex++}`);
+      values.push(nombre_servicio);
+    }
+    if (descripcion !== undefined) {
+      fieldsToUpdate.push(`descripcion = $${paramIndex++}`);
+      values.push(descripcion);
+    }
+    if (zona_cobertura !== undefined) {
+      if (!zona_cobertura) {
+        return res.status(400).json({
+          success: false,
+          message: "La zona de cobertura es obligatoria.",
+          error: { code: "VALIDATION_ERROR" }
+        });
+      }
+      fieldsToUpdate.push(`zona_cobertura = $${paramIndex++}`);
+      values.push(zona_cobertura);
+    }
+    if (capacidad_carga_kg !== undefined) {
+      if (capacidad_carga_kg === "" || isNaN(parseFloat(capacidad_carga_kg))) {
+        return res.status(400).json({
+          success: false,
+          message: "La capacidad de carga debe ser un numero valido.",
+          error: { code: "VALIDATION_ERROR" }
+        });
+      }
+      fieldsToUpdate.push(`capacidad_carga_kg = $${paramIndex++}`);
+      values.push(parseFloat(capacidad_carga_kg));
+    }
+    if (precio_envio !== undefined) {
+      if (precio_envio === "" || isNaN(parseFloat(precio_envio))) {
+        return res.status(400).json({
+          success: false,
+          message: "El precio de envio debe ser un numero valido.",
+          error: { code: "VALIDATION_ERROR" }
+        });
+      }
+      fieldsToUpdate.push(`precio_envio = $${paramIndex++}`);
+      values.push(parseFloat(precio_envio));
+    }
+    if (horario_disponible !== undefined) {
+      if (!horario_disponible) {
+        return res.status(400).json({
+          success: false,
+          message: "El horario disponible es obligatorio.",
+          error: { code: "VALIDATION_ERROR" }
+        });
+      }
+      fieldsToUpdate.push(`horario_disponible = $${paramIndex++}`);
+      values.push(horario_disponible);
+    }
+
+    if (fieldsToUpdate.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No se enviaron campos para actualizar.",
+        error: { code: "VALIDATION_ERROR" }
+      });
+    }
+
+    values.push(id);
+    const updateQuery = `
+      UPDATE servicios_envio
+      SET ${fieldsToUpdate.join(", ")}, updated_at = NOW()
+      WHERE id = $${paramIndex}
+      RETURNING id, nombre_servicio, descripcion, zona_cobertura, capacidad_carga_kg, precio_envio, horario_disponible, estado, created_at, updated_at
+    `;
+
+    const updateRes = await db.pool.query(updateQuery, values);
+    const servicioActualizado = updateRes.rows[0];
+
+    res.status(200).json({
+      success: true,
+      message: "Servicio modificado exitosamente.",
+      data: {
+        id: servicioActualizado.id,
+        nombre_servicio: servicioActualizado.nombre_servicio,
+        descripcion: servicioActualizado.descripcion,
+        zona_cobertura: servicioActualizado.zona_cobertura,
+        capacidad_carga_kg: parseFloat(servicioActualizado.capacidad_carga_kg),
+        precio_envio: parseFloat(servicioActualizado.precio_envio),
+        horario_disponible: servicioActualizado.horario_disponible,
+        estado: servicioActualizado.estado,
+        created_at: servicioActualizado.created_at,
+        updated_at: servicioActualizado.updated_at
+      }
+    });
+
+  } catch (error) {
+    console.error("Error al actualizar servicio:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error interno al modificar el servicio.",
+      error: { code: "INTERNAL_ERROR", details: error.message }
+    });
+  }
+};
+
 module.exports = {
   crearServicio,
-  listarMisServicios
+  listarMisServicios,
+  actualizarServicio
 };

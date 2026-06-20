@@ -20,7 +20,77 @@ function DashboardOperador() {
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
 
+  const [editandoId, setEditandoId] = useState(null);
+  const [nombreServicio, setNombreServicio] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [zonaCobertura, setZonaCobertura] = useState("");
+  const [capacidadCarga, setCapacidadCarga] = useState("");
+  const [precioEnvio, setPrecioEnvio] = useState("");
+  const [diasSeleccionados, setDiasSeleccionados] = useState([]);
+  const [horaInicio, setHoraInicio] = useState("");
+  const [horaFin, setHoraFin] = useState("");
+
   const token = localStorage.getItem("token");
+
+  const convertirHora24 = (hora12) => {
+    if (!hora12) return "";
+    const [time, ampm] = hora12.trim().split(" ");
+    if (!time || !ampm) return "";
+    let [horasStr, minutosStr] = time.split(":");
+    let horas = parseInt(horasStr);
+    if (ampm.toLowerCase() === "pm" && horas < 12) {
+      horas += 12;
+    }
+    if (ampm.toLowerCase() === "am" && horas === 12) {
+      horas = 0;
+    }
+    const horasStrPad = horas.toString().padStart(2, "0");
+    const minutosStrPad = minutosStr.padStart(2, "0");
+    return `${horasStrPad}:${minutosStrPad}`;
+  };
+
+  const limpiarFormulario = () => {
+    setEditandoId(null);
+    setNombreServicio("");
+    setDescripcion("");
+    setZonaCobertura("");
+    setCapacidadCarga("");
+    setPrecioEnvio("");
+    setDiasSeleccionados([]);
+    setHoraInicio("");
+    setHoraFin("");
+  };
+
+  const iniciarEdicion = (serv) => {
+    setError("");
+    setExito("");
+    setEditandoId(serv.id);
+    setNombreServicio(serv.nombre_servicio);
+    setDescripcion(serv.descripcion || "");
+    setZonaCobertura(serv.zona_cobertura);
+    setCapacidadCarga(serv.capacidad_carga_kg.toString());
+    setPrecioEnvio(serv.precio_envio.toString());
+
+    try {
+      if (serv.horario_disponible && serv.horario_disponible.includes(" de ") && serv.horario_disponible.includes(" a ")) {
+        const [diasPart, horasPart] = serv.horario_disponible.split(" de ");
+        const dias = diasPart.split(", ").map(d => d.trim());
+        const [hInicio12, hFin12] = horasPart.split(" a ");
+        
+        setDiasSeleccionados(dias);
+        setHoraInicio(convertirHora24(hInicio12));
+        setHoraFin(convertirHora24(hFin12));
+      } else {
+        setDiasSeleccionados([]);
+        setHoraInicio("");
+        setHoraFin("");
+      }
+    } catch (e) {
+      setDiasSeleccionados([]);
+      setHoraInicio("");
+      setHoraFin("");
+    }
+  };
 
   const cargarServicios = async () => {
     setCargando(true);
@@ -55,24 +125,10 @@ function DashboardOperador() {
     setError("");
     setExito("");
 
-    const form = e.target;
-    const formData = new FormData();
-    formData.append("nombre_servicio", form.nombre_servicio.value);
-    formData.append("zona_cobertura", form.zona_cobertura.value);
-    formData.append("capacidad_carga_kg", form.capacidad_carga_kg.value);
-    formData.append("precio_envio", form.precio_envio.value);
-    formData.append("descripcion", form.descripcion.value);
-
-    const checkboxesDias = form.querySelectorAll('input[name="dias_disponibles"]:checked');
-    const diasSeleccionados = Array.from(checkboxesDias).map(el => el.value);
-
     if (diasSeleccionados.length === 0) {
       setError("Debes seleccionar al menos un día de la semana.");
       return;
     }
-
-    const horaInicio = form.horario_hora_inicio.value;
-    const horaFin = form.horario_hora_fin.value;
 
     if (!horaInicio || !horaFin) {
       setError("Debes ingresar la hora de inicio y de fin.");
@@ -84,34 +140,72 @@ function DashboardOperador() {
     const horaFin12 = formatearHora12(horaFin);
     const horarioDisponible = `${diasStr} de ${horaInicio12} a ${horaFin12}`;
 
-    formData.append("horario_disponible", horarioDisponible);
-
-    const inputFotos = form.fotos;
-    if (inputFotos.files.length < 3) {
-      setError("Debes seleccionar al menos 3 fotografias.");
-      return;
-    }
-
-    for (let i = 0; i < inputFotos.files.length; i++) {
-      formData.append("fotos", inputFotos.files[i]);
-    }
-
     setCargando(true);
     try {
-      const respuesta = await fetch("http://localhost:3000/api/operador/servicios", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
-      });
-      const data = await respuesta.json();
-      if (respuesta.ok) {
-        setExito("Servicio registrado exitosamente.");
-        form.reset();
-        cargarServicios();
+      if (editandoId) {
+        const payload = {
+          nombre_servicio: nombreServicio,
+          descripcion,
+          zona_cobertura: zonaCobertura,
+          capacidad_carga_kg: parseFloat(capacidadCarga),
+          precio_envio: parseFloat(precioEnvio),
+          horario_disponible: horarioDisponible
+        };
+
+        const respuesta = await fetch(`http://localhost:3000/api/operador/servicios/${editandoId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await respuesta.json();
+        if (respuesta.ok) {
+          setExito("Servicio modificado exitosamente.");
+          limpiarFormulario();
+          cargarServicios();
+        } else {
+          setError(data.message || "Error al modificar el servicio.");
+        }
       } else {
-        setError(data.message || "Error al registrar el servicio.");
+        const formData = new FormData();
+        formData.append("nombre_servicio", nombreServicio);
+        formData.append("zona_cobertura", zonaCobertura);
+        formData.append("capacidad_carga_kg", capacidadCarga);
+        formData.append("precio_envio", precioEnvio);
+        formData.append("descripcion", descripcion);
+        formData.append("horario_disponible", horarioDisponible);
+
+        const inputFotos = e.target.fotos;
+        if (inputFotos.files.length < 3) {
+          setError("Debes seleccionar al menos 3 fotografias.");
+          setCargando(false);
+          return;
+        }
+
+        for (let i = 0; i < inputFotos.files.length; i++) {
+          formData.append("fotos", inputFotos.files[i]);
+        }
+
+        const respuesta = await fetch("http://localhost:3000/api/operador/servicios", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: formData
+        });
+
+        const data = await respuesta.json();
+        if (respuesta.ok) {
+          setExito("Servicio registrado exitosamente.");
+          limpiarFormulario();
+          e.target.reset();
+          cargarServicios();
+        } else {
+          setError(data.message || "Error al registrar el servicio.");
+        }
       }
     } catch (err) {
       setError("Error al conectar con el servidor.");
@@ -249,7 +343,9 @@ function DashboardOperador() {
           <div className="row">
             <div className="col-md-5">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Crear Nuevo Servicio</h2>
+                <h2 className="dashboard-card-title">
+                  {editandoId ? "Editar Servicio" : "Crear Nuevo Servicio"}
+                </h2>
                 
                 {error && (
                   <div className="alert alert-danger" role="alert" style={{ fontSize: "14px" }}>
@@ -270,6 +366,8 @@ function DashboardOperador() {
                       name="nombre_servicio"
                       className="form-control"
                       placeholder="Ej. Envio Express Metropolitano"
+                      value={nombreServicio}
+                      onChange={(e) => setNombreServicio(e.target.value)}
                       required
                     />
                   </div>
@@ -280,6 +378,8 @@ function DashboardOperador() {
                       className="form-control"
                       rows="2"
                       placeholder="Ej. Servicio de envio rapido para paquetes livianos"
+                      value={descripcion}
+                      onChange={(e) => setDescripcion(e.target.value)}
                     ></textarea>
                   </div>
                   <div className="mb-3">
@@ -289,6 +389,8 @@ function DashboardOperador() {
                       name="zona_cobertura"
                       className="form-control"
                       placeholder="Ej. Zona 10, 15, 16"
+                      value={zonaCobertura}
+                      onChange={(e) => setZonaCobertura(e.target.value)}
                       required
                     />
                   </div>
@@ -301,6 +403,8 @@ function DashboardOperador() {
                         className="form-control"
                         step="0.01"
                         placeholder="Ej. 20"
+                        value={capacidadCarga}
+                        onChange={(e) => setCapacidadCarga(e.target.value)}
                         required
                       />
                     </div>
@@ -312,6 +416,8 @@ function DashboardOperador() {
                         className="form-control"
                         step="0.01"
                         placeholder="Ej. 45"
+                        value={precioEnvio}
+                        onChange={(e) => setPrecioEnvio(e.target.value)}
                         required
                       />
                     </div>
@@ -330,6 +436,14 @@ function DashboardOperador() {
                                 name="dias_disponibles"
                                 value={dia}
                                 id={`check-${dia}`}
+                                checked={diasSeleccionados.includes(dia)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setDiasSeleccionados([...diasSeleccionados, dia]);
+                                  } else {
+                                    setDiasSeleccionados(diasSeleccionados.filter(d => d !== dia));
+                                  }
+                                }}
                               />
                               <label className="form-check-label fw-semibold text-dark" htmlFor={`check-${dia}`} style={{ fontSize: "13px" }}>
                                 {dia}
@@ -345,6 +459,8 @@ function DashboardOperador() {
                             type="time"
                             name="horario_hora_inicio"
                             className="form-control"
+                            value={horaInicio}
+                            onChange={(e) => setHoraInicio(e.target.value)}
                             required
                           />
                         </div>
@@ -354,26 +470,40 @@ function DashboardOperador() {
                             type="time"
                             name="horario_hora_fin"
                             className="form-control"
+                            value={horaFin}
+                            onChange={(e) => setHoraFin(e.target.value)}
                             required
                           />
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div className="mb-3">
-                    <label className="form-label">Fotografias del Vehiculo/Bodega (Minimo 3)</label>
-                    <input
-                      type="file"
-                      name="fotos"
-                      className="form-control"
-                      multiple
-                      accept="image/*"
-                      required
-                    />
-                  </div>
+                  {!editandoId && (
+                    <div className="mb-3">
+                      <label className="form-label">Fotografias del Vehiculo/Bodega (Minimo 3)</label>
+                      <input
+                        type="file"
+                        name="fotos"
+                        className="form-control"
+                        multiple
+                        accept="image/*"
+                        required
+                      />
+                    </div>
+                  )}
                   <button type="submit" className="btn btn-primary w-100" disabled={cargando}>
-                    {cargando ? "Publicando..." : "Publicar Servicio"}
+                    {cargando ? (editandoId ? "Guardando..." : "Publicando...") : (editandoId ? "Guardar Cambios" : "Publicar Servicio")}
                   </button>
+                  {editandoId && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary w-100 mt-2"
+                      onClick={limpiarFormulario}
+                      disabled={cargando}
+                    >
+                      Cancelar Edición
+                    </button>
+                  )}
                 </form>
               </div>
             </div>
@@ -429,7 +559,10 @@ function DashboardOperador() {
                         )}
                         
                         <div className="mt-2 pt-2 border-top d-flex gap-2">
-                          <button className="btn btn-sm btn-outline-secondary" disabled>
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => iniciarEdicion(serv)}
+                          >
                             Editar
                           </button>
                           <button className="btn btn-sm btn-outline-warning" disabled>
