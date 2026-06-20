@@ -14,5 +14,6 @@ router.get("/perfil/solicitudes", empresaController.verSolicitudesCambio);
 router.get("/cupones", empresaController.listarCupones);
 router.post("/cupones", empresaController.crearCupon);
 router.patch("/cupones/:id/desactivar", empresaController.desactivarCupon);
+router.post("/cupones/:id/enviar", empresaController.enviarCuponPorCorreo);
 
 module.exports = router;

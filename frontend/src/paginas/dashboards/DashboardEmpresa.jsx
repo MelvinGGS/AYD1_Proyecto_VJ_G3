@@ -737,21 +737,66 @@ function DashboardEmpresa() {
                           Usos: {c.usos_actuales} / {c.usos_maximos || "Ilimitado"}
                         </span>
                         {c.estado === "activo" && (
-                          <button
-                            onClick={() => desactivarCupon(c.id)}
-                            style={{
-                              backgroundColor: "transparent",
-                              color: "var(--color-texto-mutado)",
-                              border: "1px solid #E2E8F0",
-                              borderRadius: "8px",
-                              padding: "4px 12px",
-                              fontSize: "12px",
-                              cursor: "pointer",
-                              fontWeight: "600"
-                            }}
-                          >
-                            Desactivar
-                          </button>
+                          <div className="mt-2">
+                            <div className="d-flex gap-2 mb-2">
+                              <input
+                                type="email"
+                                className="form-control form-control-sm"
+                                placeholder="Correo del cliente"
+                                id={`correo-cupon-${c.id}`}
+                                style={{ borderRadius: "8px", fontSize: "12px" }}
+                              />
+                              <button
+                                onClick={async () => {
+                                  const correo = document.getElementById(`correo-cupon-${c.id}`).value;
+                                  if (!correo) return;
+                                  try {
+                                    const res = await fetch(`http://localhost:3000/api/empresa/cupones/${c.id}/enviar`, {
+                                      method: "POST",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                        "Authorization": `Bearer ${localStorage.getItem("token")}`
+                                      },
+                                      body: JSON.stringify({ correo_cliente: correo })
+                                    });
+                                    const data = await res.json();
+                                    setMensajeCupon(data.message);
+                                    document.getElementById(`correo-cupon-${c.id}`).value = "";
+                                  } catch {
+                                    setMensajeCupon("Error al enviar cupón.");
+                                  }
+                                }}
+                                style={{
+                                  backgroundColor: "var(--color-primario)",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "8px",
+                                  padding: "4px 12px",
+                                  fontSize: "12px",
+                                  cursor: "pointer",
+                                  fontWeight: "600",
+                                  whiteSpace: "nowrap"
+                                }}
+                              >
+                                Enviar
+                              </button>
+                            </div>
+                            <button
+                              onClick={() => desactivarCupon(c.id)}
+                              style={{
+                                backgroundColor: "transparent",
+                                color: "var(--color-texto-mutado)",
+                                border: "1px solid #E2E8F0",
+                                borderRadius: "8px",
+                                padding: "4px 12px",
+                                fontSize: "12px",
+                                cursor: "pointer",
+                                fontWeight: "600"
+                              }}
+                            >
+                              Desactivar
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>

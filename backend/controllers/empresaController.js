@@ -1,5 +1,5 @@
 const db = require("../config/db");
-
+const { enviarCorreo } = require("../utils/mailer");
 // todo para el perfil
 
 // para obtener perfil de la empresa
@@ -131,11 +131,53 @@ const desactivarCupon = async (req, res) => {
 };
 
 
+const enviarCuponPorCorreo = async (req, res) => {
+    const empresaId = req.usuario.id;
+    const { id } = req.params;
+    const { correo_cliente } = req.body;
+
+    if (!correo_cliente) {
+        return res.status(400).json({ success: false, message: "El correo del cliente es requerido." });
+    }
+
+    try {
+        const { rows } = await db.pool.query(
+            `SELECT * FROM cupones WHERE id = $1 AND creado_por = $2 AND estado = 'activo'`,
+            [id, empresaId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Cupón no encontrado o inactivo." });
+        }
+
+        const cupon = rows[0];
+
+        await enviarCorreo(
+            correo_cliente,
+            `¡Tienes un cupón de descuento! - TrackFlow-HUB`,
+            "Cupón de Descuento",
+            `Hemos recibido un cupón especial para ti. Usa el siguiente código al momento de realizar tu reservación:
+      <br><br>
+      <b>Código:</b> ${cupon.codigo}<br>
+      <b>Descuento:</b> ${cupon.tipo_descuento === "porcentaje" ? `${cupon.valor_descuento}%` : `Q${cupon.valor_descuento}`}<br>
+      <b>Válido hasta:</b> ${new Date(cupon.fecha_fin).toLocaleDateString()}<br>
+      ${cupon.descripcion ? `<b>Descripción:</b> ${cupon.descripcion}` : ""}`,
+            cupon.codigo
+        );
+
+        res.json({ success: true, message: `Cupón enviado exitosamente a ${correo_cliente}.` });
+    } catch (error) {
+        console.error("Error al enviar cupón:", error);
+        res.status(500).json({ success: false, message: "Error al enviar cupón.", error: { details: error.message } });
+    }
+};
+
 module.exports = {
     obtenerPerfil,
     solicitarCambioPerfil,
     verSolicitudesCambio,
     crearCupon,
     listarCupones,
-    desactivarCupon
+    desactivarCupon,
+    enviarCuponPorCorreo
 };
