@@ -1,10 +1,437 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import "../../estilos/topNavbar.css";
+
+const formatearHora12 = (hora24) => {
+  if (!hora24) return "";
+  const [horasStr, minutosStr] = hora24.split(":");
+  let horas = parseInt(horasStr);
+  const ampm = horas >= 12 ? "pm" : "am";
+  horas = horas % 12;
+  horas = horas ? horas : 12;
+  return `${horas}:${minutosStr} ${ampm}`;
+};
 
 function DashboardOperador() {
   const navigate = useNavigate();
   const [vista, setVista] = useState("inicio");
+  const [servicios, setServicios] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState("");
+  const [exito, setExito] = useState("");
+
+  const [editandoId, setEditandoId] = useState(null);
+  const [nombreServicio, setNombreServicio] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [zonaCobertura, setZonaCobertura] = useState("");
+  const [capacidadCarga, setCapacidadCarga] = useState("");
+  const [precioEnvio, setPrecioEnvio] = useState("");
+  const [diasSeleccionados, setDiasSeleccionados] = useState([]);
+  const [horaInicio, setHoraInicio] = useState("");
+  const [horaFin, setHoraFin] = useState("");
+
+  const [perfil, setPerfil] = useState(null);
+  const [solicitudesCambio, setSolicitudesCambio] = useState([]);
+  const [mensajePerfil, setMensajePerfil] = useState("");
+  const [formPerfil, setFormPerfil] = useState({
+    nombre: "",
+    apellido: "",
+    telefono: "",
+    telefono_respaldo: "",
+    zona_operacion: "",
+    genero: "masculino"
+  });
+
+  const token = localStorage.getItem("token");
+
+  const cargarPerfil = async () => {
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/perfil", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (data.success) {
+        setPerfil(data.data);
+        setFormPerfil({
+          nombre: data.data.nombre || "",
+          apellido: data.data.apellido || "",
+          telefono: data.data.telefono || "",
+          telefono_respaldo: data.data.telefono_respaldo || "",
+          zona_operacion: data.data.zona_operacion || "",
+          genero: data.data.genero || "masculino"
+        });
+      }
+    } catch (error) {
+      console.error("Error al cargar perfil", error);
+    }
+  };
+
+  const cargarSolicitudesCambio = async () => {
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/perfil/solicitudes", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (data.success) {
+        setSolicitudesCambio(data.data);
+      }
+    } catch (error) {
+      console.error("Error al cargar solicitudes de cambio", error);
+    }
+  };
+
+  const solicitarCambioPerfil = async () => {
+    if (!formPerfil.nombre || !formPerfil.apellido || !formPerfil.telefono || !formPerfil.zona_operacion || !formPerfil.genero) {
+      setMensajePerfil("Todos los campos obligatorios son requeridos.");
+      return;
+    }
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/perfil/solicitar-cambio", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(formPerfil)
+      });
+      const data = await respuesta.json();
+      setMensajePerfil(data.message);
+      if (data.success) {
+        cargarSolicitudesCambio();
+      }
+    } catch (error) {
+      setMensajePerfil("Error al enviar la solicitud.");
+    }
+  };
+
+  const convertirHora24 = (hora12) => {
+    if (!hora12) return "";
+    const [time, ampm] = hora12.trim().split(" ");
+    if (!time || !ampm) return "";
+    let [horasStr, minutosStr] = time.split(":");
+    let horas = parseInt(horasStr);
+    if (ampm.toLowerCase() === "pm" && horas < 12) {
+      horas += 12;
+    }
+    if (ampm.toLowerCase() === "am" && horas === 12) {
+      horas = 0;
+    }
+    const horasStrPad = horas.toString().padStart(2, "0");
+    const minutosStrPad = minutosStr.padStart(2, "0");
+    return `${horasStrPad}:${minutosStrPad}`;
+  };
+
+  const limpiarFormulario = () => {
+    setEditandoId(null);
+    setNombreServicio("");
+    setDescripcion("");
+    setZonaCobertura("");
+    setCapacidadCarga("");
+    setPrecioEnvio("");
+    setDiasSeleccionados([]);
+    setHoraInicio("");
+    setHoraFin("");
+  };
+
+  const iniciarEdicion = (serv) => {
+    setError("");
+    setExito("");
+    setEditandoId(serv.id);
+    setNombreServicio(serv.nombre_servicio);
+    setDescripcion(serv.descripcion || "");
+    setZonaCobertura(serv.zona_cobertura);
+    setCapacidadCarga(serv.capacidad_carga_kg.toString());
+    setPrecioEnvio(serv.precio_envio.toString());
+
+    try {
+      if (serv.horario_disponible && serv.horario_disponible.includes(" de ") && serv.horario_disponible.includes(" a ")) {
+        const [diasPart, horasPart] = serv.horario_disponible.split(" de ");
+        const dias = diasPart.split(", ").map(d => d.trim());
+        const [hInicio12, hFin12] = horasPart.split(" a ");
+        
+        setDiasSeleccionados(dias);
+        setHoraInicio(convertirHora24(hInicio12));
+        setHoraFin(convertirHora24(hFin12));
+      } else {
+        setDiasSeleccionados([]);
+        setHoraInicio("");
+        setHoraFin("");
+      }
+    } catch (e) {
+      setDiasSeleccionados([]);
+      setHoraInicio("");
+      setHoraFin("");
+    }
+  };
+
+  const cargarServicios = async () => {
+    setCargando(true);
+    setError("");
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/servicios", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (respuesta.ok) {
+        setServicios(data.data.items || []);
+      } else {
+        setError(data.message || "Error al obtener los servicios.");
+      }
+    } catch (err) {
+      setError("Error al conectar con el servidor.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    if (vista === "servicios") {
+      cargarServicios();
+    } else if (vista === "perfil") {
+      cargarPerfil();
+      cargarSolicitudesCambio();
+    }
+  }, [vista]);
+
+  const manejarRegistroServicio = async (e) => {
+    e.preventDefault();
+    setError("");
+    setExito("");
+
+    if (diasSeleccionados.length === 0) {
+      setError("Debes seleccionar al menos un día de la semana.");
+      return;
+    }
+
+    if (!horaInicio || !horaFin) {
+      setError("Debes ingresar la hora de inicio y de fin.");
+      return;
+    }
+
+    const diasStr = diasSeleccionados.join(", ");
+    const horaInicio12 = formatearHora12(horaInicio);
+    const horaFin12 = formatearHora12(horaFin);
+    const horarioDisponible = `${diasStr} de ${horaInicio12} a ${horaFin12}`;
+
+    setCargando(true);
+    try {
+      if (editandoId) {
+        const payload = {
+          nombre_servicio: nombreServicio,
+          descripcion,
+          zona_cobertura: zonaCobertura,
+          capacidad_carga_kg: parseFloat(capacidadCarga),
+          precio_envio: parseFloat(precioEnvio),
+          horario_disponible: horarioDisponible
+        };
+
+        const respuesta = await fetch(`http://localhost:3000/api/operador/servicios/${editandoId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await respuesta.json();
+        if (respuesta.ok) {
+          setExito("Servicio modificado exitosamente.");
+          limpiarFormulario();
+          cargarServicios();
+        } else {
+          setError(data.message || "Error al modificar el servicio.");
+        }
+      } else {
+        const formData = new FormData();
+        formData.append("nombre_servicio", nombreServicio);
+        formData.append("zona_cobertura", zonaCobertura);
+        formData.append("capacidad_carga_kg", capacidadCarga);
+        formData.append("precio_envio", precioEnvio);
+        formData.append("descripcion", descripcion);
+        formData.append("horario_disponible", horarioDisponible);
+
+        const inputFotos = e.target.fotos;
+        if (inputFotos.files.length < 3) {
+          setError("Debes seleccionar al menos 3 fotografias.");
+          setCargando(false);
+          return;
+        }
+
+        for (let i = 0; i < inputFotos.files.length; i++) {
+          formData.append("fotos", inputFotos.files[i]);
+        }
+
+        const respuesta = await fetch("http://localhost:3000/api/operador/servicios", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: formData
+        });
+
+        const data = await respuesta.json();
+        if (respuesta.ok) {
+          setExito("Servicio registrado exitosamente.");
+          limpiarFormulario();
+          e.target.reset();
+          cargarServicios();
+        } else {
+          setError(data.message || "Error al registrar el servicio.");
+        }
+      }
+    } catch (err) {
+      setError("Error al conectar con el servidor.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const manejarEliminarServicio = async (servicioId) => {
+    const confirmacion = await Swal.fire({
+      title: "¿Estás seguro?",
+      text: "No podrás revertir esto. Si el servicio tiene reservaciones pasadas se desactivará, si no, se borrará permanentemente.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#EF4444",
+      cancelButtonColor: "#64748B",
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar"
+    });
+
+    if (!confirmacion.isConfirmed) {
+      return;
+    }
+
+    setCargando(true);
+    setError("");
+    setExito("");
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/servicios/${servicioId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (respuesta.ok) {
+        setExito("Servicio eliminado exitosamente.");
+        cargarServicios();
+        if (editandoId === servicioId) {
+          limpiarFormulario();
+        }
+      } else {
+        setError(data.message || "Error al eliminar el servicio.");
+        Swal.fire({
+          title: "Error",
+          text: data.message || "No se pudo eliminar el servicio.",
+          icon: "error"
+        });
+      }
+    } catch (err) {
+      setError("Error al conectar con el servidor.");
+      Swal.fire({
+        title: "Error",
+        text: "Error al conectar con el servidor.",
+        icon: "error"
+      });
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const manejarCambioEstadoServicio = async (servicioId, estadoActual) => {
+    const esSuspender = estadoActual === "activo";
+
+    let motivo = "";
+    if (esSuspender) {
+      const { value: text, isDismissed } = await Swal.fire({
+        title: "Suspender servicio",
+        input: "textarea",
+        inputLabel: "Escribe el motivo de la suspensión (obligatorio)",
+        inputPlaceholder: "Ej. Mantenimiento del vehículo, vacaciones...",
+        showCancelButton: true,
+        confirmButtonColor: "#F59E0B",
+        cancelButtonColor: "#64748B",
+        confirmButtonText: "Suspender",
+        cancelButtonText: "Cancelar",
+        inputValidator: (value) => {
+          if (!value || !value.trim()) {
+            return "Debes escribir un motivo para suspender el servicio.";
+          }
+        }
+      });
+
+      if (isDismissed || !text) {
+        return;
+      }
+      motivo = text;
+    } else {
+      const confirmacion = await Swal.fire({
+        title: "¿Reactivar servicio?",
+        text: "El servicio volverá a estar visible para los clientes.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonColor: "#10B981",
+        cancelButtonColor: "#64748B",
+        confirmButtonText: "Sí, reactivar",
+        cancelButtonText: "Cancelar"
+      });
+
+      if (!confirmacion.isConfirmed) {
+        return;
+      }
+    }
+
+    setCargando(true);
+    setError("");
+    setExito("");
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/servicios/${servicioId}/estado`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          estado: esSuspender ? "suspendido" : "activo",
+          motivo: esSuspender ? motivo : undefined
+        })
+      });
+
+      const data = await respuesta.json();
+      if (respuesta.ok) {
+        setExito(`Servicio ${esSuspender ? "suspendido" : "activado"} exitosamente.`);
+        cargarServicios();
+        if (editandoId === servicioId) {
+          limpiarFormulario();
+        }
+      } else {
+        setError(data.message || "Error al cambiar el estado del servicio.");
+        Swal.fire({
+          title: "Error",
+          text: data.message || "No se pudo cambiar el estado del servicio.",
+          icon: "error"
+        });
+      }
+    } catch (err) {
+      setError("Error al conectar con el servidor.");
+      Swal.fire({
+        title: "Error",
+        text: "Error al conectar con el servidor.",
+        icon: "error"
+      });
+    } finally {
+      setCargando(false);
+    }
+  };
 
   const cerrarSesion = () => {
     localStorage.removeItem("token");
@@ -135,49 +562,247 @@ function DashboardOperador() {
           <div className="row">
             <div className="col-md-5">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Crear Nuevo Servicio</h2>
-                <div className="mb-3">
-                  <label className="form-label">Nombre del Servicio</label>
-                  <input type="text" className="form-control" placeholder="Ej. Envío Express Metropolitano" />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Zona de Cobertura</label>
-                  <input type="text" className="form-control" placeholder="Ej. Zona 10, 15, 16" />
-                </div>
-                <div className="row">
-                  <div className="col-6 mb-3">
-                    <label className="form-label">Carga Máxima (kg)</label>
-                    <input type="number" className="form-control" />
+                <h2 className="dashboard-card-title">
+                  {editandoId ? "Editar Servicio" : "Crear Nuevo Servicio"}
+                </h2>
+                
+                {error && (
+                  <div className="alert alert-danger" role="alert" style={{ fontSize: "14px" }}>
+                    {error}
                   </div>
-                  <div className="col-6 mb-3">
-                    <label className="form-label">Precio por Envío</label>
-                    <input type="number" className="form-control" />
+                )}
+                {exito && (
+                  <div className="alert alert-success" role="alert" style={{ fontSize: "14px" }}>
+                    {exito}
                   </div>
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Fotografías del Vehículo/Bodega (Mínimo 3)</label>
-                  <input type="file" className="form-control" multiple />
-                </div>
-                <button className="btn btn-primary w-100">Publicar Servicio</button>
+                )}
+
+                <form onSubmit={manejarRegistroServicio}>
+                  <div className="mb-3">
+                    <label className="form-label">Nombre del Servicio</label>
+                    <input
+                      type="text"
+                      name="nombre_servicio"
+                      className="form-control"
+                      placeholder="Ej. Envio Express Metropolitano"
+                      value={nombreServicio}
+                      onChange={(e) => setNombreServicio(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Descripcion</label>
+                    <textarea
+                      name="descripcion"
+                      className="form-control"
+                      rows="2"
+                      placeholder="Ej. Servicio de envio rapido para paquetes livianos"
+                      value={descripcion}
+                      onChange={(e) => setDescripcion(e.target.value)}
+                    ></textarea>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Zona de Cobertura</label>
+                    <input
+                      type="text"
+                      name="zona_cobertura"
+                      className="form-control"
+                      placeholder="Ej. Zona 10, 15, 16"
+                      value={zonaCobertura}
+                      onChange={(e) => setZonaCobertura(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="row">
+                    <div className="col-6 mb-3">
+                      <label className="form-label">Carga Maxima (kg)</label>
+                      <input
+                        type="number"
+                        name="capacidad_carga_kg"
+                        className="form-control"
+                        step="0.01"
+                        placeholder="Ej. 20"
+                        value={capacidadCarga}
+                        onChange={(e) => setCapacidadCarga(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="col-6 mb-3">
+                      <label className="form-label">Precio por Envio</label>
+                      <input
+                        type="number"
+                        name="precio_envio"
+                        className="form-control"
+                        step="0.01"
+                        placeholder="Ej. 45"
+                        value={precioEnvio}
+                        onChange={(e) => setPrecioEnvio(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label fw-bold text-dark">Horario Disponible</label>
+                    <div className="p-3 border rounded bg-light">
+                      <div className="mb-3">
+                        <label className="form-label text-muted d-block" style={{ fontSize: "12px" }}>Días Disponibles</label>
+                        <div className="d-flex flex-wrap gap-2">
+                          {["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"].map((dia) => (
+                            <div key={dia} className="form-check form-check-inline border rounded p-2 bg-white flex-grow-1 text-center" style={{ minWidth: "90px" }}>
+                              <input
+                                className="form-check-input ms-0 me-2"
+                                type="checkbox"
+                                name="dias_disponibles"
+                                value={dia}
+                                id={`check-${dia}`}
+                                checked={diasSeleccionados.includes(dia)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setDiasSeleccionados([...diasSeleccionados, dia]);
+                                  } else {
+                                    setDiasSeleccionados(diasSeleccionados.filter(d => d !== dia));
+                                  }
+                                }}
+                              />
+                              <label className="form-check-label fw-semibold text-dark" htmlFor={`check-${dia}`} style={{ fontSize: "13px" }}>
+                                {dia}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="row">
+                        <div className="col-6">
+                          <label className="form-label text-muted" style={{ fontSize: "12px" }}>Hora Inicio (Desde)</label>
+                          <input
+                            type="time"
+                            name="horario_hora_inicio"
+                            className="form-control"
+                            value={horaInicio}
+                            onChange={(e) => setHoraInicio(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="col-6">
+                          <label className="form-label text-muted" style={{ fontSize: "12px" }}>Hora Fin (Hasta)</label>
+                          <input
+                            type="time"
+                            name="horario_hora_fin"
+                            className="form-control"
+                            value={horaFin}
+                            onChange={(e) => setHoraFin(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {!editandoId && (
+                    <div className="mb-3">
+                      <label className="form-label">Fotografias del Vehiculo/Bodega (Minimo 3)</label>
+                      <input
+                        type="file"
+                        name="fotos"
+                        className="form-control"
+                        multiple
+                        accept="image/*"
+                        required
+                      />
+                    </div>
+                  )}
+                  <button type="submit" className="btn btn-primary w-100" disabled={cargando}>
+                    {cargando ? (editandoId ? "Guardando..." : "Publicando...") : (editandoId ? "Guardar Cambios" : "Publicar Servicio")}
+                  </button>
+                  {editandoId && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary w-100 mt-2"
+                      onClick={limpiarFormulario}
+                      disabled={cargando}
+                    >
+                      Cancelar Edición
+                    </button>
+                  )}
+                </form>
               </div>
             </div>
             <div className="col-md-7">
               <div className="dashboard-card-custom">
                 <h2 className="dashboard-card-title">Mis Servicios Registrados</h2>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-2 border rounded">
-                    <div className="d-flex w-100 justify-content-between">
-                      <h5 className="mb-1 fw-bold">Envío Carga Liviana</h5>
-                      <span className="badge bg-success">Activo</span>
-                    </div>
-                    <p className="mb-1 text-muted">Precio: Q45.00. Cobertura: Zona 1, 9, 10. Límite: 20kg.</p>
-                    <div className="mt-2">
-                      <button className="btn btn-sm btn-outline-secondary me-2">Editar</button>
-                      <button className="btn btn-sm btn-outline-warning me-2">Suspender temporalmente</button>
-                      <button className="btn btn-sm btn-outline-danger">Eliminar</button>
-                    </div>
+                
+                {cargando && servicios.length === 0 ? (
+                  <p className="text-center text-muted py-4">Cargando servicios...</p>
+                ) : servicios.length === 0 ? (
+                  <p className="text-center text-muted py-4">No tienes servicios registrados en el sistema.</p>
+                ) : (
+                  <div className="list-group">
+                    {servicios.map((serv) => (
+                      <div key={serv.id} className="list-group-item p-3 mb-3 border rounded bg-white">
+                        <div className="d-flex w-100 justify-content-between align-items-center">
+                          <h5 className="mb-1 fw-bold text-dark">{serv.nombre_servicio}</h5>
+                          <span className={`badge ${serv.estado === "activo" ? "bg-success" : "bg-warning text-dark"}`}>
+                            {serv.estado === "activo" ? "Activo" : "Suspendido"}
+                          </span>
+                        </div>
+                        
+                        {serv.descripcion && (
+                          <p className="mb-2 text-muted" style={{ fontSize: "14px" }}>
+                            {serv.descripcion}
+                          </p>
+                        )}
+                        
+                        <p className="mb-1 text-muted" style={{ fontSize: "13px" }}>
+                          <strong>Precio:</strong> Q{serv.precio_envio.toFixed(2)} |{" "}
+                          <strong>Cobertura:</strong> {serv.zona_cobertura} |{" "}
+                          <strong>Limite:</strong> {serv.capacidad_carga_kg} kg
+                        </p>
+                        
+                        {serv.horario_disponible && (
+                          <p className="mb-2 text-muted" style={{ fontSize: "13px" }}>
+                            <strong>Horario:</strong> {serv.horario_disponible}
+                          </p>
+                        )}
+
+                        {serv.fotos && serv.fotos.length > 0 && (
+                          <div className="d-flex gap-2 my-2 overflow-auto py-1">
+                            {serv.fotos.map((foto, index) => (
+                              <img
+                                key={index}
+                                src={foto.url_foto}
+                                alt={`Foto ${index + 1} del servicio`}
+                                className="border rounded"
+                                style={{ width: "60px", height: "60px", objectFit: "cover" }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        
+                        <div className="mt-2 pt-2 border-top d-flex gap-2">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => iniciarEdicion(serv)}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            className={`btn btn-sm ${serv.estado === "activo" ? "btn-outline-warning" : "btn-outline-success"}`}
+                            onClick={() => manejarCambioEstadoServicio(serv.id, serv.estado)}
+                            disabled={cargando}
+                          >
+                            {serv.estado === "activo" ? "Suspender temporalmente" : "Reactivar"}
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => manejarEliminarServicio(serv.id)}
+                            disabled={cargando}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -297,34 +922,196 @@ function DashboardOperador() {
 
         {vista === "perfil" && (
           <div className="row">
-            <div className="col-12">
+            <div className="col-md-8">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Editar Perfil del Operador</h2>
-                <div className="row">
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Nombre</label>
-                    <input type="text" className="form-control" defaultValue="Mario" />
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Apellido</label>
-                    <input type="text" className="form-control" defaultValue="Gómez" />
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Teléfono</label>
-                    <input type="text" className="form-control" defaultValue="44445555" />
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Zona de Operación</label>
-                    <input type="text" className="form-control" defaultValue="Zona 10" />
-                  </div>
-                  <div className="col-12">
-                    <div className="alert alert-warning">
-                      Cualquier cambio de información requiere de aprobación del administrador antes de hacerse efectivo.
+                <h2 className="dashboard-card-title">Perfil del Operador Logístico</h2>
+
+                {perfil && (
+                  <div className="row mb-4">
+                    <div className="col-md-3">
+                      <div className="text-center p-3 rounded bg-white border">
+                        <img 
+                          src={perfil.fotografia || "https://via.placeholder.com/150"} 
+                          alt="Foto de perfil" 
+                          className="rounded border" 
+                          style={{ width: "100px", height: "100px", objectFit: "cover" }} 
+                        />
+                      </div>
+                    </div>
+                    <div className="col-md-9 row g-3">
+                      <div className="col-md-6 mt-0">
+                        <div className="p-3 rounded bg-light" style={{ border: "1px solid #E2E8F0" }}>
+                          <p className="mb-1" style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>Email</p>
+                          <p className="mb-0 fw-bold" style={{ color: "var(--color-secundario)", wordBreak: "break-all" }}>{perfil.email}</p>
+                        </div>
+                      </div>
+                      <div className="col-md-6 mt-0">
+                        <div className="p-3 rounded bg-light" style={{ border: "1px solid #E2E8F0" }}>
+                          <p className="mb-1" style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>DPI / CUI</p>
+                          <p className="mb-0 fw-bold" style={{ color: "var(--color-secundario)" }}>{perfil.dpi_cui}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                )}
+
+                <div style={{ height: "1px", backgroundColor: "#E2E8F0", marginBottom: "20px" }}></div>
+
+                <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "16px" }}>
+                  Puedes solicitar cambios en los siguientes campos de tu perfil. El administrador revisará y resolverá tu solicitud.
+                </p>
+
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Nombre</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.nombre}
+                      onChange={(e) => setFormPerfil({ ...formPerfil, nombre: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Apellido</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.apellido}
+                      onChange={(e) => setFormPerfil({ ...formPerfil, apellido: e.target.value })}
+                      required
+                    />
+                  </div>
                 </div>
-                <button className="btn btn-primary me-2">Solicitar Cambios</button>
-                <button className="btn btn-secondary">Descargar Reporte PDF Ganancias</button>
+
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Teléfono</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.telefono}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "");
+                        setFormPerfil({ ...formPerfil, telefono: val });
+                      }}
+                      maxLength={8}
+                      placeholder="Ej. 44445555"
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Teléfono de Respaldo</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.telefono_respaldo}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "");
+                        setFormPerfil({ ...formPerfil, telefono_respaldo: val });
+                      }}
+                      maxLength={8}
+                      placeholder="Ej. 44445555"
+                    />
+                  </div>
+                </div>
+
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Zona de Operación</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.zona_operacion}
+                      onChange={(e) => setFormPerfil({ ...formPerfil, zona_operacion: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Género</label>
+                    <select
+                      className="form-select"
+                      value={formPerfil.genero}
+                      onChange={(e) => setFormPerfil({ ...formPerfil, genero: e.target.value })}
+                      required
+                    >
+                      <option value="masculino">Masculino</option>
+                      <option value="femenino">Femenino</option>
+                      <option value="otro">Otro</option>
+                      <option value="prefiero_no_decir">Prefiero no decir</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded mb-3" style={{ backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                  <p className="mb-0" style={{ fontSize: "13px", color: "#1D4ED8" }}>
+                    El DPI/CUI y el correo electrónico no pueden modificarse. Los cambios solicitados requieren aprobación del administrador.
+                  </p>
+                </div>
+
+                {mensajePerfil && (
+                  <div className="p-3 rounded mb-3" style={{
+                    backgroundColor: mensajePerfil.includes("enviada") ? "#F0FDF4" : "#FEF2F2",
+                    border: `1px solid ${mensajePerfil.includes("enviada") ? "#BBF7D0" : "#FECACA"}`,
+                    color: mensajePerfil.includes("enviada") ? "#166534" : "#991B1B",
+                    fontSize: "14px"
+                  }}>
+                    {mensajePerfil}
+                  </div>
+                )}
+
+                <div className="d-flex gap-2">
+                  <button
+                    onClick={solicitarCambioPerfil}
+                    className="btn btn-primary"
+                  >
+                    Solicitar Cambios
+                  </button>
+                  <button className="btn btn-secondary" disabled>Descargar Reporte PDF Ganancias</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-md-4">
+              <div className="dashboard-card-custom">
+                <h2 className="dashboard-card-title">Historial de Solicitudes</h2>
+                {solicitudesCambio.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p style={{ color: "var(--color-texto-mutado)", fontSize: "14px" }}>No hay solicitudes registradas.</p>
+                  </div>
+                ) : (
+                  solicitudesCambio.map((s) => (
+                    <div key={s.id} className="p-3 mb-3 rounded" style={{ border: "1px solid #E2E8F0", backgroundColor: "var(--color-fondo)" }}>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span style={{
+                          fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                          letterSpacing: "0.5px", padding: "3px 10px", borderRadius: "20px",
+                          backgroundColor: s.estado === "pendiente" ? "#FEF9C3" : s.estado === "aceptado" ? "#DCFCE7" : "#FEE2E2",
+                          color: s.estado === "pendiente" ? "#854D0E" : s.estado === "aceptado" ? "#166534" : "#991B1B"
+                        }}>
+                          {s.estado}
+                        </span>
+                        <span style={{ fontSize: "11px", color: "var(--color-texto-mutado)" }}>
+                          {new Date(s.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      <p style={{ fontSize: "12px", fontWeight: "600", color: "var(--color-texto-mutado)", marginBottom: "4px" }}>CAMBIOS SOLICITADOS</p>
+                      {s.campos_nuevos && Object.entries(s.campos_nuevos).map(([campo, valor]) => (
+                        <div key={campo} className="d-flex justify-content-between" style={{ fontSize: "12px", marginBottom: "2px" }}>
+                          <span style={{ color: "var(--color-texto-mutado)" }}>{campo.replace(/_/g, " ")}:</span>
+                          <span style={{ color: "var(--color-secundario)", fontWeight: "600" }}>{valor || "—"}</span>
+                        </div>
+                      ))}
+
+                      {s.motivo_rechazo && (
+                        <div className="mt-2 p-2 rounded" style={{ backgroundColor: "#FEE2E2", fontSize: "12px", color: "#991B1B" }}>
+                          <strong>Motivo de rechazo:</strong> {s.motivo_rechazo}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
