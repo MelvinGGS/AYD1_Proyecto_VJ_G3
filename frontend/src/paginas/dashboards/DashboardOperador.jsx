@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import "../../estilos/topNavbar.css";
 
 const formatearHora12 = (hora24) => {
@@ -209,6 +210,59 @@ function DashboardOperador() {
       }
     } catch (err) {
       setError("Error al conectar con el servidor.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const manejarEliminarServicio = async (servicioId) => {
+    const confirmacion = await Swal.fire({
+      title: "¿Estás seguro?",
+      text: "No podrás revertir esto. Si el servicio tiene reservaciones pasadas se desactivará, si no, se borrará permanentemente.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#EF4444",
+      cancelButtonColor: "#64748B",
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar"
+    });
+
+    if (!confirmacion.isConfirmed) {
+      return;
+    }
+
+    setCargando(true);
+    setError("");
+    setExito("");
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/servicios/${servicioId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (respuesta.ok) {
+        setExito("Servicio eliminado exitosamente.");
+        cargarServicios();
+        if (editandoId === servicioId) {
+          limpiarFormulario();
+        }
+      } else {
+        setError(data.message || "Error al eliminar el servicio.");
+        Swal.fire({
+          title: "Error",
+          text: data.message || "No se pudo eliminar el servicio.",
+          icon: "error"
+        });
+      }
+    } catch (err) {
+      setError("Error al conectar con el servidor.");
+      Swal.fire({
+        title: "Error",
+        text: "Error al conectar con el servidor.",
+        icon: "error"
+      });
     } finally {
       setCargando(false);
     }
@@ -568,7 +622,11 @@ function DashboardOperador() {
                           <button className="btn btn-sm btn-outline-warning" disabled>
                             Suspender temporalmente
                           </button>
-                          <button className="btn btn-sm btn-outline-danger" disabled>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => manejarEliminarServicio(serv.id)}
+                            disabled={cargando}
+                          >
                             Eliminar
                           </button>
                         </div>

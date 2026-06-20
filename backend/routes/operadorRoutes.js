@@ -25,5 +25,6 @@ router.use(verificarOperador);
 router.post("/servicios", upload.array("fotos", 10), operadorServicioController.crearServicio);
 router.get("/servicios", operadorServicioController.listarMisServicios);
 router.put("/servicios/:id", operadorServicioController.actualizarServicio);
+router.delete("/servicios/:id", operadorServicioController.eliminarServicio);
 
 module.exports = router;

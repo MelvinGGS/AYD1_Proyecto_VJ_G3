@@ -317,8 +317,85 @@ const actualizarServicio = async (req, res) => {
   }
 };
 
+const eliminarServicio = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const checkRes = await db.pool.query(
+      "SELECT id, operador_id FROM servicios_envio WHERE id = $1",
+      [id]
+    );
+
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Servicio no encontrado.",
+        error: { code: "SERVICE_NOT_FOUND" }
+      });
+    }
+
+    const servicioDb = checkRes.rows[0];
+    if (servicioDb.operador_id !== req.usuario.id) {
+      return res.status(403).json({
+        success: false,
+        message: "No tienes permisos para eliminar este servicio.",
+        error: { code: "FORBIDDEN" }
+      });
+    }
+
+    // Verificar si tiene reservaciones activas
+    const activeBookingsRes = await db.pool.query(
+      "SELECT COUNT(*) FROM reservaciones WHERE servicio_envio_id = $1 AND estado IN ('pendiente_pago', 'confirmado', 'en_transito')",
+      [id]
+    );
+
+    if (parseInt(activeBookingsRes.rows[0].count) > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No se puede eliminar el servicio porque tiene reservaciones activas en proceso.",
+        error: { code: "HAS_ACTIVE_BOOKINGS" }
+      });
+    }
+
+    // Verificar si tiene alguna reservacion histórica
+    const anyBookingsRes = await db.pool.query(
+      "SELECT COUNT(*) FROM reservaciones WHERE servicio_envio_id = $1",
+      [id]
+    );
+    const hasAnyBookings = parseInt(anyBookingsRes.rows[0].count) > 0;
+
+    if (hasAnyBookings) {
+      // Eliminación lógica
+      await db.pool.query(
+        "UPDATE servicios_envio SET estado = 'eliminado', updated_at = NOW() WHERE id = $1",
+        [id]
+      );
+    } else {
+      // Eliminación física (limpia fotos automáticamente por ON DELETE CASCADE en fotos_servicio)
+      await db.pool.query(
+        "DELETE FROM servicios_envio WHERE id = $1",
+        [id]
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Servicio eliminado exitosamente."
+    });
+
+  } catch (error) {
+    console.error("Error al eliminar servicio:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error interno al eliminar el servicio.",
+      error: { code: "INTERNAL_ERROR", details: error.message }
+    });
+  }
+};
+
 module.exports = {
   crearServicio,
   listarMisServicios,
-  actualizarServicio
+  actualizarServicio,
+  eliminarServicio
 };
