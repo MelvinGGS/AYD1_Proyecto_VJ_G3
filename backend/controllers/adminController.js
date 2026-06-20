@@ -431,6 +431,98 @@ const registrarAdministrador = async (req, res) => {
   }
 };
 
+const listarSolicitudesCambioPerfil = async (req, res) => {
+  try {
+    const { rows } = await db.pool.query(`
+      SELECT 
+        sc.id,
+        sc.campos_nuevos,
+        sc.campos_previos,
+        sc.estado,
+        sc.motivo_rechazo,
+        sc.fecha_resolucion,
+        sc.created_at,
+        u.id AS usuario_id,
+        u.email,
+        u.rol
+      FROM solicitudes_cambio_perfil sc
+      INNER JOIN usuarios u ON u.id = sc.usuario_id
+      ORDER BY sc.created_at DESC
+    `);
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error al obtener solicitudes.", error: { details: error.message } });
+  }
+};
+
+const resolverCambioPerfil = async (req, res) => {
+  const { id } = req.params;
+  const { accion, motivo_rechazo } = req.body;
+
+  if (!accion || !["aprobar", "rechazar"].includes(accion)) {
+    return res.status(400).json({ success: false, message: "Acción inválida. Usa 'aprobar' o 'rechazar'." });
+  }
+
+  if (accion === "rechazar" && !motivo_rechazo) {
+    return res.status(400).json({ success: false, message: "El motivo de rechazo es obligatorio." });
+  }
+
+  const client = await db.pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows } = await client.query(
+      "SELECT * FROM solicitudes_cambio_perfil WHERE id = $1",
+      [id]
+    );
+
+    if (rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Solicitud no encontrada." });
+    }
+
+    const solicitud = rows[0];
+
+    if (solicitud.estado !== "pendiente") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ success: false, message: "Esta solicitud ya fue resuelta." });
+    }
+
+    if (accion === "aprobar") {
+      const camposNuevos = solicitud.campos_nuevos;
+      const sets = Object.keys(camposNuevos).map((k, i) => `${k} = $${i + 2}`).join(", ");
+      const valores = Object.values(camposNuevos);
+
+      const rol = (await client.query("SELECT rol FROM usuarios WHERE id = $1", [solicitud.usuario_id])).rows[0]?.rol;
+      const tabla = rol === "operador" ? "operadores_logisticos" : "empresas_transporte";
+
+      await client.query(
+        `UPDATE ${tabla} SET ${sets} WHERE id = $1`,
+        [solicitud.usuario_id, ...valores]
+      );
+
+      await client.query(
+        `UPDATE solicitudes_cambio_perfil SET estado = 'aceptado', revisado_por = $1, fecha_resolucion = NOW() WHERE id = $2`,
+        [req.usuario.id, id]
+      );
+    } else {
+      await client.query(
+        `UPDATE solicitudes_cambio_perfil SET estado = 'rechazado', revisado_por = $1, motivo_rechazo = $2, fecha_resolucion = NOW() WHERE id = $3`,
+        [req.usuario.id, motivo_rechazo, id]
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: `Solicitud ${accion === "aprobar" ? "aprobada" : "rechazada"} correctamente.` });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error al resolver cambio perfil:", error);
+    res.status(500).json({ success: false, message: "Error al resolver solicitud.", error: { details: error.message } });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   listarSolicitudesOperadores,
   listarSolicitudesEmpresas,
@@ -439,5 +531,7 @@ module.exports = {
   agendarReunionEmpresa,
   aceptarEmpresa,
   rechazarEmpresa: rechazarSolicitud("empresa_transporte", "empresa"),
-  registrarAdministrador
+  registrarAdministrador,
+  listarSolicitudesCambioPerfil,
+  resolverCambioPerfil
 };

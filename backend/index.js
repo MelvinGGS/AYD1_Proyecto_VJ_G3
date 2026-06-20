@@ -7,6 +7,7 @@ const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const operadorRoutes = require("./routes/operadorRoutes");
 const rutaRoutes = require('./routes/rutaRoutes');
+const empresaRoutes = require('./routes/empresaRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +27,9 @@ app.use("/api/operador", operadorRoutes);
 
 // Registrar rutas de rutas de transporte
 app.use('/api/rutas', rutaRoutes);
+
+// para las rutas de empresa
+app.use('/api/empresa', empresaRoutes);
 
 // Ruta de estado base del servidor (Health Check)
 app.get("/", (req, res) => {
