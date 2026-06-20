@@ -690,20 +690,32 @@ function DashboardEmpresa() {
                           >
                             Editar
                           </button>
-                          {ruta.estado !== 'suspendida' && (
-                            <button
-                              className="btn btn-sm btn-outline-warning me-2"
-                              onClick={() => cambiarEstadoRuta(ruta.id, "suspendida")}
-                            >
-                              Suspender temporalmente
-                            </button>
+
+                          {/* Opciones cuando la ruta está ACTIVA */}
+                          {ruta.estado === 'activa' && (
+                            <>
+                              <button
+                                className="btn btn-sm btn-outline-warning me-2"
+                                onClick={() => cambiarEstadoRuta(ruta.id, "suspendida")}
+                              >
+                                Suspender temporalmente
+                              </button>
+                              <button
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => setModalCancelacion(ruta.id)}
+                              >
+                                Cancelar por emergencia
+                              </button>
+                            </>
                           )}
-                          {ruta.estado !== 'cancelada' && (
+
+                          {/* Opción cuando la ruta está SUSPENDIDA o CANCELADA */}
+                          {(ruta.estado === 'suspendida' || ruta.estado === 'cancelada') && (
                             <button
-                              className="btn btn-sm btn-outline-danger"
-                              onClick={() => setModalCancelacion(ruta.id)}
+                              className="btn btn-sm btn-outline-success"
+                              onClick={() => cambiarEstadoRuta(ruta.id, "activa")}
                             >
-                              Cancelar por emergencia
+                              Reactivar ruta
                             </button>
                           )}
                         </div>
@@ -1088,7 +1100,7 @@ function DashboardEmpresa() {
                           <div key={c.id} className="p-3 mb-2 rounded" style={{ border: "1px solid #E2E8F0" }}>
                             <div className="d-flex justify-content-between mb-1">
                               <span className="fw-bold" style={{ color: "var(--color-secundario)", fontSize: "13px" }}>{c.cliente_email}</span>
-                              <span style={{ color: "var(--color-primario)", fontWeight: "700" }}>{"".repeat(c.puntuacion)}{"".repeat(5 - c.puntuacion)}</span>
+                              <span style={{ color: "var(--color-primario)", fontWeight: "700" }}>{"⭐".repeat(c.puntuacion)}{"☆".repeat(5 - c.puntuacion)}</span>
                             </div>
                             <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px" }}>{c.nombre_ruta}</p>
                             {c.comentario && <p style={{ fontSize: "13px", color: "var(--color-secundario)", margin: 0 }}>{c.comentario}</p>}
