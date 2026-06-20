@@ -1,5 +1,10 @@
 const db = require("../config/db");
 const { enviarCorreo } = require("../utils/mailer");
+const csv = require("csv-parser");
+const fs = require("fs");
+const multer = require("multer");
+
+
 // todo para el perfil
 
 // para obtener perfil de la empresa
@@ -329,6 +334,140 @@ const reporteEstadoRutas = async (req, res) => {
     }
 };
 
+// flota de vehiculos
+const listarFlota = async (req, res) => {
+    const empresaId = req.usuario.id;
+    try {
+        const { rows } = await db.pool.query(
+            `SELECT id, tipo_vehiculo, placa, capacidad, modelo, anio, estado
+       FROM flota_vehiculos
+       WHERE empresa_id = $1
+       ORDER BY created_at DESC`,
+            [empresaId]
+        );
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error("Error al listar flota:", error);
+        res.status(500).json({ success: false, message: "Error al obtener flota.", error: { details: error.message } });
+    }
+};
+
+const registrarVehiculo = async (req, res) => {
+    const empresaId = req.usuario.id;
+    const { tipo_vehiculo, placa, capacidad, modelo, anio } = req.body;
+
+    if (!tipo_vehiculo || !placa || !capacidad) {
+        return res.status(400).json({ success: false, message: "Tipo, placa y capacidad son requeridos." });
+    }
+
+    try {
+        const { rows } = await db.pool.query(
+            `INSERT INTO flota_vehiculos (empresa_id, tipo_vehiculo, placa, capacidad, modelo, anio)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+            [empresaId, tipo_vehiculo, placa.toUpperCase(), capacidad, modelo || null, anio || null]
+        );
+        res.status(201).json({ success: true, message: "Vehículo registrado exitosamente.", data: rows[0] });
+    } catch (error) {
+        if (error.code === "23505") {
+            return res.status(409).json({ success: false, message: "Ya existe un vehículo con esa placa." });
+        }
+        console.error("Error al registrar vehículo:", error);
+        res.status(500).json({ success: false, message: "Error al registrar vehículo.", error: { details: error.message } });
+    }
+};
+
+const cambiarEstadoVehiculo = async (req, res) => {
+    const empresaId = req.usuario.id;
+    const { id } = req.params;
+    const { estado } = req.body;
+
+    const estadosValidos = ["disponible", "en_ruta", "mantenimiento", "fuera_servicio"];
+    if (!estadosValidos.includes(estado)) {
+        return res.status(400).json({ success: false, message: "Estado inválido." });
+    }
+
+    try {
+        const { rows } = await db.pool.query(
+            "UPDATE flota_vehiculos SET estado = $1 WHERE id = $2 AND empresa_id = $3 RETURNING id",
+            [estado, id, empresaId]
+        );
+        if (rows.length === 0) return res.status(404).json({ success: false, message: "Vehículo no encontrado." });
+        res.json({ success: true, message: "Estado actualizado." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error al actualizar estado.", error: { details: error.message } });
+    }
+};
+
+const eliminarVehiculo = async (req, res) => {
+    const empresaId = req.usuario.id;
+    const { id } = req.params;
+    try {
+        const { rows } = await db.pool.query(
+            "DELETE FROM flota_vehiculos WHERE id = $1 AND empresa_id = $2 RETURNING id",
+            [id, empresaId]
+        );
+        if (rows.length === 0) return res.status(404).json({ success: false, message: "Vehículo no encontrado." });
+        res.json({ success: true, message: "Vehículo eliminado." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error al eliminar vehículo.", error: { details: error.message } });
+    }
+};
+
+
+const cargarFlotaCSV = async (req, res) => {
+    const empresaId = req.usuario.id;
+
+    if (!req.file) {
+        return res.status(400).json({ success: false, message: "No se recibió ningún archivo CSV." });
+    }
+
+    const vehiculos = [];
+    const errores = [];
+
+    try {
+        await new Promise((resolve, reject) => {
+            fs.createReadStream(req.file.path)
+                .pipe(csv())
+                .on("data", (row) => {
+                    if (!row.tipo_vehiculo || !row.placa || !row.capacidad) {
+                        errores.push(`Fila inválida: falta tipo_vehiculo, placa o capacidad`);
+                    } else {
+                        vehiculos.push(row);
+                    }
+                })
+                .on("end", resolve)
+                .on("error", reject);
+        });
+
+        let insertados = 0;
+        for (const v of vehiculos) {
+            try {
+                await db.pool.query(
+                    `INSERT INTO flota_vehiculos (empresa_id, tipo_vehiculo, placa, capacidad, modelo, anio)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (placa) DO NOTHING`,
+                    [empresaId, v.tipo_vehiculo, v.placa.toUpperCase(), parseInt(v.capacidad), v.modelo || null, v.anio ? parseInt(v.anio) : null]
+                );
+                insertados++;
+            } catch (err) {
+                errores.push(`Error en placa ${v.placa}: ${err.message}`);
+            }
+        }
+
+        fs.unlinkSync(req.file.path);
+
+        res.json({
+            success: true,
+            message: `${insertados} vehículo(s) cargado(s) exitosamente.${errores.length > 0 ? ` ${errores.length} error(es).` : ""}`,
+            errores
+        });
+    } catch (error) {
+        console.error("Error al procesar CSV flota:", error);
+        res.status(500).json({ success: false, message: "Error al procesar el archivo CSV.", error: { details: error.message } });
+    }
+};
+
 module.exports = {
     obtenerPerfil,
     solicitarCambioPerfil,
@@ -341,5 +480,10 @@ module.exports = {
     reporteGanancias,
     historialServicios,
     reporteCalificaciones,
-    reporteEstadoRutas
+    reporteEstadoRutas,
+    listarFlota,
+    registrarVehiculo,
+    cambiarEstadoVehiculo,
+    eliminarVehiculo,
+    cargarFlotaCSV
 };

@@ -36,6 +36,12 @@ function DashboardEmpresa() {
   const [calificaciones, setCalificaciones] = useState({ data: [], promedio_general: 0 });
   const [estadoRutas, setEstadoRutas] = useState([]);
   const [vistaReporte, setVistaReporte] = useState("recibidos");
+  const [flota, setFlota] = useState([]);
+  const [formVehiculo, setFormVehiculo] = useState({
+    tipo_vehiculo: "", placa: "", capacidad: "", modelo: "", anio: ""
+  });
+  const [mensajeFlota, setMensajeFlota] = useState("");
+  const [archivoCSVFlota, setArchivoCSVFlota] = useState(null);
 
 
   // ESTADOS PARA EL MODAL DE CANCELACIÓN
@@ -53,6 +59,7 @@ function DashboardEmpresa() {
       cargarCalificaciones();
       cargarEstadoRutas();
     }
+    if (vista === "flota") cargarFlota();
   }, [vista]);
 
   const cargarRutas = async () => {
@@ -115,6 +122,98 @@ function DashboardEmpresa() {
       const data = await res.json();
       if (data.success) setEstadoRutas(data.data);
     } catch (error) { console.error("Error", error); }
+  };
+
+  const cargarFlota = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/flota", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      const data = await res.json();
+      if (data.success) setFlota(data.data);
+    } catch (error) {
+      console.error("Error al cargar flota", error);
+    }
+  };
+
+  const registrarVehiculo = async () => {
+    if (!formVehiculo.tipo_vehiculo || !formVehiculo.placa || !formVehiculo.capacidad) {
+      setMensajeFlota("Tipo, placa y capacidad son requeridos.");
+      return;
+    }
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/flota", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(formVehiculo)
+      });
+      const data = await res.json();
+      setMensajeFlota(data.message);
+      if (data.success) {
+        setFormVehiculo({ tipo_vehiculo: "", placa: "", capacidad: "", modelo: "", anio: "" });
+        cargarFlota();
+      }
+    } catch (error) {
+      setMensajeFlota("Error al registrar vehículo.");
+    }
+  };
+
+  const cambiarEstadoVehiculo = async (id, estado) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/empresa/flota/${id}/estado`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify({ estado })
+      });
+      const data = await res.json();
+      if (data.success) cargarFlota();
+    } catch (error) {
+      console.error("Error al cambiar estado", error);
+    }
+  };
+
+  const eliminarVehiculo = async (id) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/empresa/flota/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      const data = await res.json();
+      if (data.success) cargarFlota();
+    } catch (error) {
+      console.error("Error al eliminar vehículo", error);
+    }
+  };
+
+  const subirCSVFlota = async () => {
+    if (!archivoCSVFlota) {
+      setMensajeFlota("Por favor selecciona un archivo CSV.");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("archivo_csv", archivoCSVFlota);
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/flota/csv", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
+        body: formData
+      });
+      const data = await res.json();
+      setMensajeFlota(data.message);
+      if (data.success) {
+        setArchivoCSVFlota(null);
+        document.getElementById("csv-flota").value = "";
+        cargarFlota();
+      }
+    } catch (error) {
+      setMensajeFlota("Error al subir CSV.");
+    }
   };
 
   const manejarEnvioManual = async (e) => {
@@ -583,40 +682,206 @@ function DashboardEmpresa() {
           <div className="row">
             <div className="col-md-5">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Registrar Vehículo Manualmente</h2>
+                <h2 className="dashboard-card-title">Registrar Vehículo</h2>
+
                 <div className="mb-3">
-                  <label className="form-label">Tipo de Vehículo</label>
-                  <input type="text" className="form-control" placeholder="Ej. Microbús, Autobús" />
+                  <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>
+                    Tipo de Vehículo <span style={{ color: "var(--color-primario)" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej. Microbús, Autobús, Camión"
+                    value={formVehiculo.tipo_vehiculo}
+                    onChange={(e) => setFormVehiculo({ ...formVehiculo, tipo_vehiculo: e.target.value })}
+                  />
                 </div>
+
                 <div className="mb-3">
-                  <label className="form-label">Placa</label>
-                  <input type="text" className="form-control" placeholder="Ej. C-908BXD" />
+                  <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>
+                    Placa <span style={{ color: "var(--color-primario)" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej. C-908BXD"
+                    value={formVehiculo.placa}
+                    onChange={(e) => setFormVehiculo({ ...formVehiculo, placa: e.target.value.toUpperCase() })}
+                  />
                 </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>
+                    Capacidad de Pasajeros <span style={{ color: "var(--color-primario)" }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="Ej. 45"
+                    value={formVehiculo.capacidad}
+                    onChange={(e) => setFormVehiculo({ ...formVehiculo, capacidad: e.target.value })}
+                  />
+                </div>
+
                 <div className="row">
                   <div className="col-6 mb-3">
-                    <label className="form-label">Capacidad de pasajeros</label>
-                    <input type="number" className="form-control" />
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Modelo</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Ej. Scania"
+                      value={formVehiculo.modelo}
+                      onChange={(e) => setFormVehiculo({ ...formVehiculo, modelo: e.target.value })}
+                    />
                   </div>
                   <div className="col-6 mb-3">
-                    <label className="form-label">Modelo / Año</label>
-                    <input type="text" className="form-control" placeholder="Ej. Toyota 2022" />
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Año</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Ej. 2022"
+                      value={formVehiculo.anio}
+                      onChange={(e) => setFormVehiculo({ ...formVehiculo, anio: e.target.value })}
+                    />
                   </div>
                 </div>
-                <button className="btn btn-primary w-100">Registrar Vehículo</button>
+
+                {mensajeFlota && (
+                  <div className="p-3 rounded mb-3" style={{
+                    backgroundColor: mensajeFlota.includes("exitosamente") ? "#F0FDF4" : "#FEF2F2",
+                    border: `1px solid ${mensajeFlota.includes("exitosamente") ? "#BBF7D0" : "#FECACA"}`,
+                    color: mensajeFlota.includes("exitosamente") ? "#166534" : "#991B1B",
+                    fontSize: "14px"
+                  }}>
+                    {mensajeFlota}
+                  </div>
+                )}
+                <div style={{ height: "1px", backgroundColor: "#E2E8F0", margin: "20px 0" }}></div>
+
+                <h3 style={{ fontSize: "14px", fontWeight: "700", color: "var(--color-secundario)", marginBottom: "12px" }}>
+                  O carga desde CSV
+                </h3>
+
+                <div className="mb-3">
+                  <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>
+                    Archivo CSV de Flota
+                  </label>
+                  <input
+                    type="file"
+                    className="form-control"
+                    accept=".csv"
+                    id="csv-flota"
+                    onChange={(e) => setArchivoCSVFlota(e.target.files[0])}
+                  />
+                  <small style={{ color: "var(--color-texto-mutado)", fontSize: "11px" }}>
+                    Columnas requeridas: tipo_vehiculo, placa, capacidad, modelo, anio
+                  </small>
+                </div>
+
+                <button
+                  onClick={subirCSVFlota}
+                  style={{
+                    width: "100%",
+                    backgroundColor: "var(--color-secundario)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "var(--radio)",
+                    padding: "10px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    marginBottom: "12px"
+                  }}
+                >
+                  Cargar CSV de Flota
+                </button>
+                <button
+                  onClick={registrarVehiculo}
+                  style={{
+                    width: "100%",
+                    backgroundColor: "var(--color-primario)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "var(--radio)",
+                    padding: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    fontSize: "15px"
+                  }}
+                >
+                  Registrar Vehículo
+                </button>
               </div>
             </div>
+
             <div className="col-md-7">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Flota de Vehículos Registrada</h2>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-2 border rounded">
-                    <div className="d-flex w-100 justify-content-between">
-                      <h5 className="mb-1 fw-bold">Autobús Pulman</h5>
-                      <span className="badge bg-success">Disponible</span>
-                    </div>
-                    <p className="mb-1 text-muted">Placa: C-123XYZ. Capacidad: 45 pasajeros. Modelo: Scania 2021.</p>
+                <h2 className="dashboard-card-title">Flota de Vehículos</h2>
+                {flota.length === 0 ? (
+                  <div className="text-center py-5">
+                    <p style={{ color: "var(--color-texto-mutado)", fontSize: "14px" }}>No hay vehículos registrados.</p>
                   </div>
-                </div>
+                ) : (
+                  flota.map((v) => (
+                    <div key={v.id} className="p-3 mb-3 rounded" style={{ border: "1px solid #E2E8F0", backgroundColor: "var(--color-blanco)" }}>
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <h5 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{v.tipo_vehiculo}</h5>
+                          <p className="mb-0" style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>
+                            Placa: <strong>{v.placa}</strong> · Capacidad: {v.capacidad} pasajeros
+                            {v.modelo && ` · ${v.modelo}`}{v.anio && ` ${v.anio}`}
+                          </p>
+                        </div>
+                        <span style={{
+                          fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                          padding: "3px 10px", borderRadius: "20px",
+                          backgroundColor: v.estado === "disponible" ? "#DCFCE7" : v.estado === "en_ruta" ? "#DBEAFE" : v.estado === "mantenimiento" ? "#FEF9C3" : "#FEE2E2",
+                          color: v.estado === "disponible" ? "#166534" : v.estado === "en_ruta" ? "#1D4ED8" : v.estado === "mantenimiento" ? "#854D0E" : "#991B1B"
+                        }}>
+                          {v.estado.replace("_", " ")}
+                        </span>
+                      </div>
+
+                      <div className="d-flex gap-2 mt-2 flex-wrap">
+                        {["disponible", "en_ruta", "mantenimiento", "fuera_servicio"].map(estado => (
+                          v.estado !== estado && (
+                            <button
+                              key={estado}
+                              onClick={() => cambiarEstadoVehiculo(v.id, estado)}
+                              style={{
+                                backgroundColor: "var(--color-fondo)",
+                                color: "var(--color-texto-mutado)",
+                                border: "1px solid #E2E8F0",
+                                borderRadius: "8px",
+                                padding: "3px 10px",
+                                fontSize: "11px",
+                                cursor: "pointer",
+                                fontWeight: "600"
+                              }}
+                            >
+                              {estado.replace("_", " ")}
+                            </button>
+                          )
+                        ))}
+                        <button
+                          onClick={() => eliminarVehiculo(v.id)}
+                          style={{
+                            backgroundColor: "transparent",
+                            color: "#991B1B",
+                            border: "1px solid #FECACA",
+                            borderRadius: "8px",
+                            padding: "3px 10px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                            fontWeight: "600"
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
