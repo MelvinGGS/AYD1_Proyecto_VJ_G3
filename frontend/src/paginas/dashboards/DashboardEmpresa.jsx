@@ -48,7 +48,14 @@ function DashboardEmpresa() {
   const [modalCancelacion, setModalCancelacion] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
 
+  const [resumenInicio, setResumenInicio] = useState({
+    ganancias: 0,
+    rutas_activas: 0,
+    vehiculos: 0
+  });
+
   useEffect(() => {
+    if (vista === "inicio") cargarResumenInicio();
     if (vista === "rutas" && empresaId) cargarRutas();
     if (vista === "perfil") { cargarPerfil(); cargarSolicitudesCambio(); }
     if (vista === "cupones") cargarCupones();
@@ -319,6 +326,31 @@ function DashboardEmpresa() {
     navigate("/");
   };
 
+  const cargarResumenInicio = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { "Authorization": `Bearer ${token}` };
+
+      const [resGanancias, resRutas, resFlota] = await Promise.all([
+        fetch("http://localhost:3000/api/empresa/reportes/ganancias", { headers }),
+        fetch(`http://localhost:3000/api/rutas/empresa/${empresaId}`, { headers }),
+        fetch("http://localhost:3000/api/empresa/flota", { headers })
+      ]);
+
+      const dataGanancias = await resGanancias.json();
+      const dataRutas = await resRutas.json();
+      const dataFlota = await resFlota.json();
+
+      setResumenInicio({
+        ganancias: dataGanancias.success ? dataGanancias.totales.ganancias_empresa : 0,
+        rutas_activas: dataRutas.success ? dataRutas.data.filter(r => r.estado === "activa").length : 0,
+        vehiculos: dataFlota.success ? dataFlota.data.length : 0
+      });
+    } catch (error) {
+      console.error("Error al cargar resumen", error);
+    }
+  };
+
   // Para el perfil
   const cargarPerfil = async () => {
     try {
@@ -507,26 +539,32 @@ function DashboardEmpresa() {
                 <h1 className="fw-bold mb-3" style={{ color: "var(--color-secundario)" }}>
                   Bienvenido al Portal de la Empresa de Transporte
                 </h1>
-                <p className="text-muted mb-4">
+                <p style={{ color: "var(--color-texto-mutado)", marginBottom: "32px" }}>
                   Carga tus rutas de viaje, administra los vehículos de tu flota, y ofrece descuentos de viaje a tus clientes.
                 </p>
                 <div className="row justify-content-center">
                   <div className="col-md-3 mb-3">
-                    <div className="p-3 border rounded bg-light">
-                      <h3 className="fw-bold text-primary">Q12,600.00</h3>
-                      <span className="text-muted">Ganancias Generadas (90%)</span>
+                    <div className="p-4 rounded" style={{ backgroundColor: "var(--color-fondo)", border: "1px solid #E2E8F0" }}>
+                      <h3 className="fw-bold mb-1" style={{ color: "var(--color-primario)" }}>
+                        Q{parseFloat(resumenInicio.ganancias || 0).toFixed(2)}
+                      </h3>
+                      <span style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Ganancias Generadas (90%)</span>
                     </div>
                   </div>
                   <div className="col-md-3 mb-3">
-                    <div className="p-3 border rounded bg-light">
-                      <h3 className="fw-bold text-success">4</h3>
-                      <span className="text-muted">Rutas Operativas</span>
+                    <div className="p-4 rounded" style={{ backgroundColor: "var(--color-fondo)", border: "1px solid #E2E8F0" }}>
+                      <h3 className="fw-bold mb-1" style={{ color: "var(--color-primario)" }}>
+                        {resumenInicio.rutas_activas}
+                      </h3>
+                      <span style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Rutas Activas</span>
                     </div>
                   </div>
                   <div className="col-md-3 mb-3">
-                    <div className="p-3 border rounded bg-light">
-                      <h3 className="fw-bold text-warning">8</h3>
-                      <span className="text-muted">Vehículos Flota</span>
+                    <div className="p-4 rounded" style={{ backgroundColor: "var(--color-fondo)", border: "1px solid #E2E8F0" }}>
+                      <h3 className="fw-bold mb-1" style={{ color: "var(--color-primario)" }}>
+                        {resumenInicio.vehiculos}
+                      </h3>
+                      <span style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Vehículos en Flota</span>
                     </div>
                   </div>
                 </div>
