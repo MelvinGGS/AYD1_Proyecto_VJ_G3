@@ -31,7 +31,83 @@ function DashboardOperador() {
   const [horaInicio, setHoraInicio] = useState("");
   const [horaFin, setHoraFin] = useState("");
 
+  const [perfil, setPerfil] = useState(null);
+  const [solicitudesCambio, setSolicitudesCambio] = useState([]);
+  const [mensajePerfil, setMensajePerfil] = useState("");
+  const [formPerfil, setFormPerfil] = useState({
+    nombre: "",
+    apellido: "",
+    telefono: "",
+    telefono_respaldo: "",
+    zona_operacion: "",
+    genero: "masculino"
+  });
+
   const token = localStorage.getItem("token");
+
+  const cargarPerfil = async () => {
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/perfil", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (data.success) {
+        setPerfil(data.data);
+        setFormPerfil({
+          nombre: data.data.nombre || "",
+          apellido: data.data.apellido || "",
+          telefono: data.data.telefono || "",
+          telefono_respaldo: data.data.telefono_respaldo || "",
+          zona_operacion: data.data.zona_operacion || "",
+          genero: data.data.genero || "masculino"
+        });
+      }
+    } catch (error) {
+      console.error("Error al cargar perfil", error);
+    }
+  };
+
+  const cargarSolicitudesCambio = async () => {
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/perfil/solicitudes", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (data.success) {
+        setSolicitudesCambio(data.data);
+      }
+    } catch (error) {
+      console.error("Error al cargar solicitudes de cambio", error);
+    }
+  };
+
+  const solicitarCambioPerfil = async () => {
+    if (!formPerfil.nombre || !formPerfil.apellido || !formPerfil.telefono || !formPerfil.zona_operacion || !formPerfil.genero) {
+      setMensajePerfil("Todos los campos obligatorios son requeridos.");
+      return;
+    }
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/perfil/solicitar-cambio", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(formPerfil)
+      });
+      const data = await respuesta.json();
+      setMensajePerfil(data.message);
+      if (data.success) {
+        cargarSolicitudesCambio();
+      }
+    } catch (error) {
+      setMensajePerfil("Error al enviar la solicitud.");
+    }
+  };
 
   const convertirHora24 = (hora12) => {
     if (!hora12) return "";
@@ -118,6 +194,9 @@ function DashboardOperador() {
   useEffect(() => {
     if (vista === "servicios") {
       cargarServicios();
+    } else if (vista === "perfil") {
+      cargarPerfil();
+      cargarSolicitudesCambio();
     }
   }, [vista]);
 
@@ -843,34 +922,196 @@ function DashboardOperador() {
 
         {vista === "perfil" && (
           <div className="row">
-            <div className="col-12">
+            <div className="col-md-8">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Editar Perfil del Operador</h2>
-                <div className="row">
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Nombre</label>
-                    <input type="text" className="form-control" defaultValue="Mario" />
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Apellido</label>
-                    <input type="text" className="form-control" defaultValue="Gómez" />
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Teléfono</label>
-                    <input type="text" className="form-control" defaultValue="44445555" />
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label">Zona de Operación</label>
-                    <input type="text" className="form-control" defaultValue="Zona 10" />
-                  </div>
-                  <div className="col-12">
-                    <div className="alert alert-warning">
-                      Cualquier cambio de información requiere de aprobación del administrador antes de hacerse efectivo.
+                <h2 className="dashboard-card-title">Perfil del Operador Logístico</h2>
+
+                {perfil && (
+                  <div className="row mb-4">
+                    <div className="col-md-3">
+                      <div className="text-center p-3 rounded bg-white border">
+                        <img 
+                          src={perfil.fotografia || "https://via.placeholder.com/150"} 
+                          alt="Foto de perfil" 
+                          className="rounded border" 
+                          style={{ width: "100px", height: "100px", objectFit: "cover" }} 
+                        />
+                      </div>
+                    </div>
+                    <div className="col-md-9 row g-3">
+                      <div className="col-md-6 mt-0">
+                        <div className="p-3 rounded bg-light" style={{ border: "1px solid #E2E8F0" }}>
+                          <p className="mb-1" style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>Email</p>
+                          <p className="mb-0 fw-bold" style={{ color: "var(--color-secundario)", wordBreak: "break-all" }}>{perfil.email}</p>
+                        </div>
+                      </div>
+                      <div className="col-md-6 mt-0">
+                        <div className="p-3 rounded bg-light" style={{ border: "1px solid #E2E8F0" }}>
+                          <p className="mb-1" style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>DPI / CUI</p>
+                          <p className="mb-0 fw-bold" style={{ color: "var(--color-secundario)" }}>{perfil.dpi_cui}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                )}
+
+                <div style={{ height: "1px", backgroundColor: "#E2E8F0", marginBottom: "20px" }}></div>
+
+                <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "16px" }}>
+                  Puedes solicitar cambios en los siguientes campos de tu perfil. El administrador revisará y resolverá tu solicitud.
+                </p>
+
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Nombre</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.nombre}
+                      onChange={(e) => setFormPerfil({ ...formPerfil, nombre: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Apellido</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.apellido}
+                      onChange={(e) => setFormPerfil({ ...formPerfil, apellido: e.target.value })}
+                      required
+                    />
+                  </div>
                 </div>
-                <button className="btn btn-primary me-2">Solicitar Cambios</button>
-                <button className="btn btn-secondary">Descargar Reporte PDF Ganancias</button>
+
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Teléfono</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.telefono}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "");
+                        setFormPerfil({ ...formPerfil, telefono: val });
+                      }}
+                      maxLength={8}
+                      placeholder="Ej. 44445555"
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Teléfono de Respaldo</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.telefono_respaldo}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "");
+                        setFormPerfil({ ...formPerfil, telefono_respaldo: val });
+                      }}
+                      maxLength={8}
+                      placeholder="Ej. 44445555"
+                    />
+                  </div>
+                </div>
+
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Zona de Operación</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formPerfil.zona_operacion}
+                      onChange={(e) => setFormPerfil({ ...formPerfil, zona_operacion: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Género</label>
+                    <select
+                      className="form-select"
+                      value={formPerfil.genero}
+                      onChange={(e) => setFormPerfil({ ...formPerfil, genero: e.target.value })}
+                      required
+                    >
+                      <option value="masculino">Masculino</option>
+                      <option value="femenino">Femenino</option>
+                      <option value="otro">Otro</option>
+                      <option value="prefiero_no_decir">Prefiero no decir</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded mb-3" style={{ backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                  <p className="mb-0" style={{ fontSize: "13px", color: "#1D4ED8" }}>
+                    El DPI/CUI y el correo electrónico no pueden modificarse. Los cambios solicitados requieren aprobación del administrador.
+                  </p>
+                </div>
+
+                {mensajePerfil && (
+                  <div className="p-3 rounded mb-3" style={{
+                    backgroundColor: mensajePerfil.includes("enviada") ? "#F0FDF4" : "#FEF2F2",
+                    border: `1px solid ${mensajePerfil.includes("enviada") ? "#BBF7D0" : "#FECACA"}`,
+                    color: mensajePerfil.includes("enviada") ? "#166534" : "#991B1B",
+                    fontSize: "14px"
+                  }}>
+                    {mensajePerfil}
+                  </div>
+                )}
+
+                <div className="d-flex gap-2">
+                  <button
+                    onClick={solicitarCambioPerfil}
+                    className="btn btn-primary"
+                  >
+                    Solicitar Cambios
+                  </button>
+                  <button className="btn btn-secondary" disabled>Descargar Reporte PDF Ganancias</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-md-4">
+              <div className="dashboard-card-custom">
+                <h2 className="dashboard-card-title">Historial de Solicitudes</h2>
+                {solicitudesCambio.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p style={{ color: "var(--color-texto-mutado)", fontSize: "14px" }}>No hay solicitudes registradas.</p>
+                  </div>
+                ) : (
+                  solicitudesCambio.map((s) => (
+                    <div key={s.id} className="p-3 mb-3 rounded" style={{ border: "1px solid #E2E8F0", backgroundColor: "var(--color-fondo)" }}>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span style={{
+                          fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                          letterSpacing: "0.5px", padding: "3px 10px", borderRadius: "20px",
+                          backgroundColor: s.estado === "pendiente" ? "#FEF9C3" : s.estado === "aceptado" ? "#DCFCE7" : "#FEE2E2",
+                          color: s.estado === "pendiente" ? "#854D0E" : s.estado === "aceptado" ? "#166534" : "#991B1B"
+                        }}>
+                          {s.estado}
+                        </span>
+                        <span style={{ fontSize: "11px", color: "var(--color-texto-mutado)" }}>
+                          {new Date(s.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      <p style={{ fontSize: "12px", fontWeight: "600", color: "var(--color-texto-mutado)", marginBottom: "4px" }}>CAMBIOS SOLICITADOS</p>
+                      {s.campos_nuevos && Object.entries(s.campos_nuevos).map(([campo, valor]) => (
+                        <div key={campo} className="d-flex justify-content-between" style={{ fontSize: "12px", marginBottom: "2px" }}>
+                          <span style={{ color: "var(--color-texto-mutado)" }}>{campo.replace(/_/g, " ")}:</span>
+                          <span style={{ color: "var(--color-secundario)", fontWeight: "600" }}>{valor || "—"}</span>
+                        </div>
+                      ))}
+
+                      {s.motivo_rechazo && (
+                        <div className="mt-2 p-2 rounded" style={{ backgroundColor: "#FEE2E2", fontSize: "12px", color: "#991B1B" }}>
+                          <strong>Motivo de rechazo:</strong> {s.motivo_rechazo}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

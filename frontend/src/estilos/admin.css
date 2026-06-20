@@ -573,3 +573,14 @@
     flex-direction: column-reverse;
   }
 }
+
+@media (min-width: 961px) {
+  .admin-page {
+    height: 100vh;
+    overflow: hidden;
+  }
+  .admin-content {
+    height: 100vh;
+    overflow-y: auto;
+  }
+}

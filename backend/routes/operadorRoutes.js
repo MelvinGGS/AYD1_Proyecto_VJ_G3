@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const operadorServicioController = require("../controllers/operadorServicioController");
+const operadorController = require("../controllers/operadorController");
 const authMiddleware = require("../middlewares/auth");
 const upload = require("../middlewares/upload");
 
@@ -27,5 +28,10 @@ router.get("/servicios", operadorServicioController.listarMisServicios);
 router.put("/servicios/:id", operadorServicioController.actualizarServicio);
 router.delete("/servicios/:id", operadorServicioController.eliminarServicio);
 router.patch("/servicios/:id/estado", operadorServicioController.cambiarEstadoServicio);
+
+// Rutas de gestion de perfil
+router.get("/perfil", operadorController.obtenerPerfil);
+router.post("/perfil/solicitar-cambio", operadorController.solicitarCambioPerfil);
+router.get("/perfil/solicitudes", operadorController.verSolicitudesCambio);
 
 module.exports = router;
