@@ -817,7 +817,12 @@ function DashboardEmpresa() {
                       type="text"
                       className="form-control"
                       value={formPerfil.telefono}
-                      onChange={(e) => setFormPerfil({ ...formPerfil, telefono: e.target.value })}
+                      onChange={(e) => {
+                        const valor = e.target.value.replace(/\D/g, "");
+                        setFormPerfil({ ...formPerfil, telefono: valor });
+                      }}
+                      maxLength={8}
+                      placeholder="Ej. 44445555"
                     />
                   </div>
                   <div className="col-md-6 mb-3">
@@ -828,7 +833,12 @@ function DashboardEmpresa() {
                       type="text"
                       className="form-control"
                       value={formPerfil.telefono_respaldo}
-                      onChange={(e) => setFormPerfil({ ...formPerfil, telefono_respaldo: e.target.value })}
+                      onChange={(e) => {
+                        const valor = e.target.value.replace(/\D/g, "");
+                        setFormPerfil({ ...formPerfil, telefono_respaldo: valor });
+                      }}
+                      maxLength={8}
+                      placeholder="Ej. 44445555"
                     />
                   </div>
                 </div>
@@ -881,8 +891,8 @@ function DashboardEmpresa() {
                         <span style={{
                           fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
                           letterSpacing: "0.5px", padding: "3px 10px", borderRadius: "20px",
-                          backgroundColor: s.estado === "pendiente" ? "#FEF9C3" : s.estado === "aprobado" ? "#DCFCE7" : "#FEE2E2",
-                          color: s.estado === "pendiente" ? "#854D0E" : s.estado === "aprobado" ? "#166534" : "#991B1B"
+                          backgroundColor: s.estado === "pendiente" ? "#FEF9C3" : s.estado === "aceptado" ? "#DCFCE7" : "#FEE2E2",
+                          color: s.estado === "pendiente" ? "#854D0E" : s.estado === "aceptado" ? "#166534" : "#991B1B"
                         }}>
                           {s.estado}
                         </span>

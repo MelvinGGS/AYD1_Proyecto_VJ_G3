@@ -4,6 +4,7 @@ import "../../estilos/admin.css";
 import SolicitudesOperadores from "./componentes/SolicitudesOperadores";
 import SolicitudesEmpresas from "./componentes/SolicitudesEmpresas";
 import RegistrarAdminForm from "./componentes/RegistrarAdminForm";
+import SolicitudesCambioPerfil from "./componentes/SolicitudesCambioPerfil";
 
 const API_URL = "http://localhost:3000/api/admin";
 
@@ -312,6 +313,9 @@ function DashboardAdmin() {
           <button className={vista === "administradores" ? "active" : ""} onClick={() => cambiarVista("administradores")}>
             Administradores
           </button>
+          <button className={vista === "cambios_perfil" ? "active" : ""} onClick={() => cambiarVista("cambios_perfil")}>
+            Cambios de Perfil
+          </button>
         </nav>
 
         <button className="admin-logout" type="button" onClick={cerrarSesion}>
@@ -323,7 +327,12 @@ function DashboardAdmin() {
         <header className="admin-header">
           <div>
             <p className="admin-kicker">Modulo de aprobaciones</p>
-            <h2>{vista === "operadores" ? "Solicitudes de operadores" : vista === "empresas" ? "Solicitudes de empresas" : "Registrar administrador"}</h2>
+            <h2>
+              {vista === "operadores" ? "Solicitudes de operadores"
+                : vista === "empresas" ? "Solicitudes de empresas"
+                  : vista === "cambios_perfil" ? "Solicitudes de cambio de perfil"
+                    : "Registrar administrador"}
+            </h2>
           </div>
           <button className="admin-icon-button" type="button" onClick={cargarSolicitudes} disabled={cargando} title="Actualizar">
             {cargando ? "..." : "R"}
@@ -333,7 +342,7 @@ function DashboardAdmin() {
         {mensaje && <div className="admin-alert success">{mensaje}</div>}
         {error && <div className="admin-alert error">{error}</div>}
 
-        {vista !== "administradores" && (
+        {vista !== "administradores" && vista !== "cambios_perfil" &&(
           <>
             <section className="admin-metrics" aria-label="Resumen de solicitudes">
               <button type="button" className={filtroEstado === "por_aprobar" ? "active" : ""} onClick={() => setFiltroEstado("por_aprobar")}>
@@ -396,6 +405,10 @@ function DashboardAdmin() {
             API_URL={API_URL}
             estadoTexto={estadoTexto}
           />
+        )}
+
+        {vista === "cambios_perfil" && (
+          <SolicitudesCambioPerfil token={token} />
         )}
 
         {vista === "administradores" && (
