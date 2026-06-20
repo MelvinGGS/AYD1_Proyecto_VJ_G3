@@ -30,16 +30,43 @@ function DashboardEmpresa() {
     valor_descuento: "", fecha_inicio: "", fecha_fin: "", usos_maximos: ""
   });
   const [mensajeCupon, setMensajeCupon] = useState("");
+  const [reportes, setReportes] = useState([]);
+  const [reporteGanancias, setReporteGanancias] = useState({ data: [], totales: {} });
+  const [historialServicios, setHistorialServicios] = useState([]);
+  const [calificaciones, setCalificaciones] = useState({ data: [], promedio_general: 0 });
+  const [estadoRutas, setEstadoRutas] = useState([]);
+  const [vistaReporte, setVistaReporte] = useState("recibidos");
+  const [flota, setFlota] = useState([]);
+  const [formVehiculo, setFormVehiculo] = useState({
+    tipo_vehiculo: "", placa: "", capacidad: "", modelo: "", anio: ""
+  });
+  const [mensajeFlota, setMensajeFlota] = useState("");
+  const [archivoCSVFlota, setArchivoCSVFlota] = useState(null);
 
 
   // ESTADOS PARA EL MODAL DE CANCELACIÓN
   const [modalCancelacion, setModalCancelacion] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
 
+  const [resumenInicio, setResumenInicio] = useState({
+    ganancias: 0,
+    rutas_activas: 0,
+    vehiculos: 0
+  });
+
   useEffect(() => {
+    if (vista === "inicio") cargarResumenInicio();
     if (vista === "rutas" && empresaId) cargarRutas();
     if (vista === "perfil") { cargarPerfil(); cargarSolicitudesCambio(); }
     if (vista === "cupones") cargarCupones();
+    if (vista === "reportes") {
+      cargarReportes();
+      cargarReporteGanancias();
+      cargarHistorialServicios();
+      cargarCalificaciones();
+      cargarEstadoRutas();
+    }
+    if (vista === "flota") cargarFlota();
   }, [vista]);
 
   const cargarRutas = async () => {
@@ -49,6 +76,150 @@ function DashboardEmpresa() {
       if (data.success) setRutas(data.data);
     } catch (error) {
       console.error("Error al cargar rutas", error);
+    }
+  };
+
+  const cargarReportes = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/reportes", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      const data = await res.json();
+      if (data.success) setReportes(data.data);
+    } catch (error) {
+      console.error("Error al cargar reportes", error);
+    }
+  };
+
+  const cargarReporteGanancias = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/reportes/ganancias", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      const data = await res.json();
+      if (data.success) setReporteGanancias({ data: data.data, totales: data.totales });
+    } catch (error) { console.error("Error", error); }
+  };
+
+  const cargarHistorialServicios = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/reportes/historial-servicios", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      const data = await res.json();
+      if (data.success) setHistorialServicios(data.data);
+    } catch (error) { console.error("Error", error); }
+  };
+
+  const cargarCalificaciones = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/reportes/calificaciones", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      const data = await res.json();
+      if (data.success) setCalificaciones({ data: data.data, promedio_general: data.promedio_general });
+    } catch (error) { console.error("Error", error); }
+  };
+
+  const cargarEstadoRutas = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/reportes/estado-rutas", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      const data = await res.json();
+      if (data.success) setEstadoRutas(data.data);
+    } catch (error) { console.error("Error", error); }
+  };
+
+  const cargarFlota = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/flota", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      const data = await res.json();
+      if (data.success) setFlota(data.data);
+    } catch (error) {
+      console.error("Error al cargar flota", error);
+    }
+  };
+
+  const registrarVehiculo = async () => {
+    if (!formVehiculo.tipo_vehiculo || !formVehiculo.placa || !formVehiculo.capacidad) {
+      setMensajeFlota("Tipo, placa y capacidad son requeridos.");
+      return;
+    }
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/flota", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(formVehiculo)
+      });
+      const data = await res.json();
+      setMensajeFlota(data.message);
+      if (data.success) {
+        setFormVehiculo({ tipo_vehiculo: "", placa: "", capacidad: "", modelo: "", anio: "" });
+        cargarFlota();
+      }
+    } catch (error) {
+      setMensajeFlota("Error al registrar vehículo.");
+    }
+  };
+
+  const cambiarEstadoVehiculo = async (id, estado) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/empresa/flota/${id}/estado`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify({ estado })
+      });
+      const data = await res.json();
+      if (data.success) cargarFlota();
+    } catch (error) {
+      console.error("Error al cambiar estado", error);
+    }
+  };
+
+  const eliminarVehiculo = async (id) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/empresa/flota/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      const data = await res.json();
+      if (data.success) cargarFlota();
+    } catch (error) {
+      console.error("Error al eliminar vehículo", error);
+    }
+  };
+
+  const subirCSVFlota = async () => {
+    if (!archivoCSVFlota) {
+      setMensajeFlota("Por favor selecciona un archivo CSV.");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("archivo_csv", archivoCSVFlota);
+    try {
+      const res = await fetch("http://localhost:3000/api/empresa/flota/csv", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
+        body: formData
+      });
+      const data = await res.json();
+      setMensajeFlota(data.message);
+      if (data.success) {
+        setArchivoCSVFlota(null);
+        document.getElementById("csv-flota").value = "";
+        cargarFlota();
+      }
+    } catch (error) {
+      setMensajeFlota("Error al subir CSV.");
     }
   };
 
@@ -153,6 +324,31 @@ function DashboardEmpresa() {
     localStorage.removeItem("usuario_id");
     localStorage.removeItem("id");
     navigate("/");
+  };
+
+  const cargarResumenInicio = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { "Authorization": `Bearer ${token}` };
+
+      const [resGanancias, resRutas, resFlota] = await Promise.all([
+        fetch("http://localhost:3000/api/empresa/reportes/ganancias", { headers }),
+        fetch(`http://localhost:3000/api/rutas/empresa/${empresaId}`, { headers }),
+        fetch("http://localhost:3000/api/empresa/flota", { headers })
+      ]);
+
+      const dataGanancias = await resGanancias.json();
+      const dataRutas = await resRutas.json();
+      const dataFlota = await resFlota.json();
+
+      setResumenInicio({
+        ganancias: dataGanancias.success ? dataGanancias.totales.ganancias_empresa : 0,
+        rutas_activas: dataRutas.success ? dataRutas.data.filter(r => r.estado === "activa").length : 0,
+        vehiculos: dataFlota.success ? dataFlota.data.length : 0
+      });
+    } catch (error) {
+      console.error("Error al cargar resumen", error);
+    }
   };
 
   // Para el perfil
@@ -343,26 +539,32 @@ function DashboardEmpresa() {
                 <h1 className="fw-bold mb-3" style={{ color: "var(--color-secundario)" }}>
                   Bienvenido al Portal de la Empresa de Transporte
                 </h1>
-                <p className="text-muted mb-4">
+                <p style={{ color: "var(--color-texto-mutado)", marginBottom: "32px" }}>
                   Carga tus rutas de viaje, administra los vehículos de tu flota, y ofrece descuentos de viaje a tus clientes.
                 </p>
                 <div className="row justify-content-center">
                   <div className="col-md-3 mb-3">
-                    <div className="p-3 border rounded bg-light">
-                      <h3 className="fw-bold text-primary">Q12,600.00</h3>
-                      <span className="text-muted">Ganancias Generadas (90%)</span>
+                    <div className="p-4 rounded" style={{ backgroundColor: "var(--color-fondo)", border: "1px solid #E2E8F0" }}>
+                      <h3 className="fw-bold mb-1" style={{ color: "var(--color-primario)" }}>
+                        Q{parseFloat(resumenInicio.ganancias || 0).toFixed(2)}
+                      </h3>
+                      <span style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Ganancias Generadas (90%)</span>
                     </div>
                   </div>
                   <div className="col-md-3 mb-3">
-                    <div className="p-3 border rounded bg-light">
-                      <h3 className="fw-bold text-success">4</h3>
-                      <span className="text-muted">Rutas Operativas</span>
+                    <div className="p-4 rounded" style={{ backgroundColor: "var(--color-fondo)", border: "1px solid #E2E8F0" }}>
+                      <h3 className="fw-bold mb-1" style={{ color: "var(--color-primario)" }}>
+                        {resumenInicio.rutas_activas}
+                      </h3>
+                      <span style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Rutas Activas</span>
                     </div>
                   </div>
                   <div className="col-md-3 mb-3">
-                    <div className="p-3 border rounded bg-light">
-                      <h3 className="fw-bold text-warning">8</h3>
-                      <span className="text-muted">Vehículos Flota</span>
+                    <div className="p-4 rounded" style={{ backgroundColor: "var(--color-fondo)", border: "1px solid #E2E8F0" }}>
+                      <h3 className="fw-bold mb-1" style={{ color: "var(--color-primario)" }}>
+                        {resumenInicio.vehiculos}
+                      </h3>
+                      <span style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Vehículos en Flota</span>
                     </div>
                   </div>
                 </div>
@@ -518,60 +720,419 @@ function DashboardEmpresa() {
           <div className="row">
             <div className="col-md-5">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Registrar Vehículo Manualmente</h2>
+                <h2 className="dashboard-card-title">Registrar Vehículo</h2>
+
                 <div className="mb-3">
-                  <label className="form-label">Tipo de Vehículo</label>
-                  <input type="text" className="form-control" placeholder="Ej. Microbús, Autobús" />
+                  <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>
+                    Tipo de Vehículo <span style={{ color: "var(--color-primario)" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej. Microbús, Autobús, Camión"
+                    value={formVehiculo.tipo_vehiculo}
+                    onChange={(e) => setFormVehiculo({ ...formVehiculo, tipo_vehiculo: e.target.value })}
+                  />
                 </div>
+
                 <div className="mb-3">
-                  <label className="form-label">Placa</label>
-                  <input type="text" className="form-control" placeholder="Ej. C-908BXD" />
+                  <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>
+                    Placa <span style={{ color: "var(--color-primario)" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej. C-908BXD"
+                    value={formVehiculo.placa}
+                    onChange={(e) => setFormVehiculo({ ...formVehiculo, placa: e.target.value.toUpperCase() })}
+                  />
                 </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>
+                    Capacidad de Pasajeros <span style={{ color: "var(--color-primario)" }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="Ej. 45"
+                    value={formVehiculo.capacidad}
+                    onChange={(e) => setFormVehiculo({ ...formVehiculo, capacidad: e.target.value })}
+                  />
+                </div>
+
                 <div className="row">
                   <div className="col-6 mb-3">
-                    <label className="form-label">Capacidad de pasajeros</label>
-                    <input type="number" className="form-control" />
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Modelo</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Ej. Scania"
+                      value={formVehiculo.modelo}
+                      onChange={(e) => setFormVehiculo({ ...formVehiculo, modelo: e.target.value })}
+                    />
                   </div>
                   <div className="col-6 mb-3">
-                    <label className="form-label">Modelo / Año</label>
-                    <input type="text" className="form-control" placeholder="Ej. Toyota 2022" />
+                    <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>Año</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Ej. 2022"
+                      value={formVehiculo.anio}
+                      onChange={(e) => setFormVehiculo({ ...formVehiculo, anio: e.target.value })}
+                    />
                   </div>
                 </div>
-                <button className="btn btn-primary w-100">Registrar Vehículo</button>
+
+                {mensajeFlota && (
+                  <div className="p-3 rounded mb-3" style={{
+                    backgroundColor: mensajeFlota.includes("exitosamente") ? "#F0FDF4" : "#FEF2F2",
+                    border: `1px solid ${mensajeFlota.includes("exitosamente") ? "#BBF7D0" : "#FECACA"}`,
+                    color: mensajeFlota.includes("exitosamente") ? "#166534" : "#991B1B",
+                    fontSize: "14px"
+                  }}>
+                    {mensajeFlota}
+                  </div>
+                )}
+                <div style={{ height: "1px", backgroundColor: "#E2E8F0", margin: "20px 0" }}></div>
+
+                <h3 style={{ fontSize: "14px", fontWeight: "700", color: "var(--color-secundario)", marginBottom: "12px" }}>
+                  O carga desde CSV
+                </h3>
+
+                <div className="mb-3">
+                  <label className="form-label fw-semibold" style={{ color: "var(--color-secundario)" }}>
+                    Archivo CSV de Flota
+                  </label>
+                  <input
+                    type="file"
+                    className="form-control"
+                    accept=".csv"
+                    id="csv-flota"
+                    onChange={(e) => setArchivoCSVFlota(e.target.files[0])}
+                  />
+                  <small style={{ color: "var(--color-texto-mutado)", fontSize: "11px" }}>
+                    Columnas requeridas: tipo_vehiculo, placa, capacidad, modelo, anio
+                  </small>
+                </div>
+
+                <button
+                  onClick={subirCSVFlota}
+                  style={{
+                    width: "100%",
+                    backgroundColor: "var(--color-secundario)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "var(--radio)",
+                    padding: "10px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    marginBottom: "12px"
+                  }}
+                >
+                  Cargar CSV de Flota
+                </button>
+                <button
+                  onClick={registrarVehiculo}
+                  style={{
+                    width: "100%",
+                    backgroundColor: "var(--color-primario)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "var(--radio)",
+                    padding: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    fontSize: "15px"
+                  }}
+                >
+                  Registrar Vehículo
+                </button>
               </div>
             </div>
+
             <div className="col-md-7">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Flota de Vehículos Registrada</h2>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-2 border rounded">
-                    <div className="d-flex w-100 justify-content-between">
-                      <h5 className="mb-1 fw-bold">Autobús Pulman</h5>
-                      <span className="badge bg-success">Disponible</span>
-                    </div>
-                    <p className="mb-1 text-muted">Placa: C-123XYZ. Capacidad: 45 pasajeros. Modelo: Scania 2021.</p>
+                <h2 className="dashboard-card-title">Flota de Vehículos</h2>
+                {flota.length === 0 ? (
+                  <div className="text-center py-5">
+                    <p style={{ color: "var(--color-texto-mutado)", fontSize: "14px" }}>No hay vehículos registrados.</p>
                   </div>
-                </div>
+                ) : (
+                  flota.map((v) => (
+                    <div key={v.id} className="p-3 mb-3 rounded" style={{ border: "1px solid #E2E8F0", backgroundColor: "var(--color-blanco)" }}>
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <h5 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{v.tipo_vehiculo}</h5>
+                          <p className="mb-0" style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>
+                            Placa: <strong>{v.placa}</strong> · Capacidad: {v.capacidad} pasajeros
+                            {v.modelo && ` · ${v.modelo}`}{v.anio && ` ${v.anio}`}
+                          </p>
+                        </div>
+                        <span style={{
+                          fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                          padding: "3px 10px", borderRadius: "20px",
+                          backgroundColor: v.estado === "disponible" ? "#DCFCE7" : v.estado === "en_ruta" ? "#DBEAFE" : v.estado === "mantenimiento" ? "#FEF9C3" : "#FEE2E2",
+                          color: v.estado === "disponible" ? "#166534" : v.estado === "en_ruta" ? "#1D4ED8" : v.estado === "mantenimiento" ? "#854D0E" : "#991B1B"
+                        }}>
+                          {v.estado.replace("_", " ")}
+                        </span>
+                      </div>
+
+                      <div className="d-flex gap-2 mt-2 flex-wrap">
+                        {["disponible", "en_ruta", "mantenimiento", "fuera_servicio"].map(estado => (
+                          v.estado !== estado && (
+                            <button
+                              key={estado}
+                              onClick={() => cambiarEstadoVehiculo(v.id, estado)}
+                              style={{
+                                backgroundColor: "var(--color-fondo)",
+                                color: "var(--color-texto-mutado)",
+                                border: "1px solid #E2E8F0",
+                                borderRadius: "8px",
+                                padding: "3px 10px",
+                                fontSize: "11px",
+                                cursor: "pointer",
+                                fontWeight: "600"
+                              }}
+                            >
+                              {estado.replace("_", " ")}
+                            </button>
+                          )
+                        ))}
+                        <button
+                          onClick={() => eliminarVehiculo(v.id)}
+                          style={{
+                            backgroundColor: "transparent",
+                            color: "#991B1B",
+                            border: "1px solid #FECACA",
+                            borderRadius: "8px",
+                            padding: "3px 10px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                            fontWeight: "600"
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
         )}
 
         {vista === "reportes" && (
-          <div className="row">
-            <div className="col-12">
+          <div>
+            {/* Tabs de reportes */}
+            <div className="d-flex gap-2 mb-4" style={{ flexWrap: "wrap" }}>
+              {[
+                { id: "recibidos", label: "Reportes de Clientes" },
+                { id: "ganancias", label: "Ganancias" },
+                { id: "historial", label: "Historial de Servicios" },
+                { id: "calificaciones", label: "Calificaciones" },
+                { id: "estado-rutas", label: "Estado de Rutas" }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setVistaReporte(tab.id)}
+                  style={{
+                    padding: "8px 16px", borderRadius: "20px", fontSize: "13px",
+                    fontWeight: "600", cursor: "pointer", border: "none",
+                    backgroundColor: vistaReporte === tab.id ? "var(--color-primario)" : "var(--color-fondo)",
+                    color: vistaReporte === tab.id ? "white" : "var(--color-texto-mutado)"
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Reportes de clientes */}
+            {vistaReporte === "recibidos" && (
               <div className="dashboard-card-custom">
                 <h2 className="dashboard-card-title">Reportes Recibidos de Clientes</h2>
-                <p className="text-muted">Quejas reportadas por los clientes sobre tus servicios de transporte.</p>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-2 border rounded bg-light">
-                    <h6 className="fw-bold">Cobro de boleto extra en bus</h6>
-                    <p className="mb-1 text-muted">Estado del reporte: En revisión (el administrador está validando).</p>
-                    <small>Cliente: Juan Pérez</small>
+                <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "20px" }}>
+                  Las empresas de transporte no pueden reportar directamente a los clientes.
+                </p>
+                {reportes.length === 0 ? (
+                  <div className="text-center py-5">
+                    <p style={{ color: "var(--color-texto-mutado)" }}>No hay reportes recibidos.</p>
+                  </div>
+                ) : (
+                  reportes.map((r) => (
+                    <div key={r.id} className="p-3 mb-3 rounded" style={{ border: "1px solid #E2E8F0" }}>
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px" }}>
+                            Cliente: <strong>{r.cliente_email}</strong>
+                          </p>
+                          <h5 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{r.motivo}</h5>
+                        </div>
+                        <span style={{
+                          fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                          padding: "3px 10px", borderRadius: "20px",
+                          backgroundColor: r.estado === "enviado" ? "#DBEAFE" : r.estado === "en_revision" ? "#FEF9C3" : r.estado === "aceptado" ? "#DCFCE7" : "#FEE2E2",
+                          color: r.estado === "enviado" ? "#1D4ED8" : r.estado === "en_revision" ? "#854D0E" : r.estado === "aceptado" ? "#166534" : "#991B1B"
+                        }}>
+                          {r.estado.replace("_", " ")}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>{r.descripcion}</p>
+                      <small style={{ color: "var(--color-texto-mutado)" }}>{new Date(r.created_at).toLocaleDateString()}</small>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Ganancias */}
+            {vistaReporte === "ganancias" && (
+              <div>
+                <div className="row mb-4">
+                  {[
+                    { label: "Total Reservaciones", valor: reporteGanancias.totales.total_reservaciones || 0, prefix: "" },
+                    { label: "Ingresos Totales", valor: parseFloat(reporteGanancias.totales.ingresos_totales || 0).toFixed(2), prefix: "Q" },
+                    { label: "Ganancias (90%)", valor: parseFloat(reporteGanancias.totales.ganancias_empresa || 0).toFixed(2), prefix: "Q" },
+                    { label: "Comisión Plataforma (10%)", valor: parseFloat(reporteGanancias.totales.comision_plataforma || 0).toFixed(2), prefix: "Q" }
+                  ].map((item, i) => (
+                    <div key={i} className="col-md-3 mb-3">
+                      <div className="p-3 rounded text-center" style={{ backgroundColor: "var(--color-blanco)", border: "1px solid #E2E8F0" }}>
+                        <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>{item.label}</p>
+                        <h3 className="fw-bold mb-0" style={{ color: "var(--color-primario)" }}>{item.prefix}{item.valor}</h3>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="dashboard-card-custom">
+                  <h2 className="dashboard-card-title">Ganancias por Ruta</h2>
+                  {reporteGanancias.data.length === 0 ? (
+                    <p style={{ color: "var(--color-texto-mutado)" }}>No hay datos de ganancias aún.</p>
+                  ) : (
+                    reporteGanancias.data.map((r, i) => (
+                      <div key={i} className="p-3 mb-2 rounded" style={{ border: "1px solid #E2E8F0" }}>
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div>
+                            <h6 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{r.nombre_ruta}</h6>
+                            <small style={{ color: "var(--color-texto-mutado)" }}>{r.origen} --- {r.destino}</small>
+                          </div>
+                          <div className="text-end">
+                            <p className="fw-bold mb-0" style={{ color: "var(--color-primario)" }}>Q{parseFloat(r.ganancias_empresa || 0).toFixed(2)}</p>
+                            <small style={{ color: "var(--color-texto-mutado)" }}>{r.total_reservaciones} reservaciones</small>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Historial de servicios */}
+            {vistaReporte === "historial" && (
+              <div className="dashboard-card-custom">
+                <h2 className="dashboard-card-title">Historial de Servicios Contratados</h2>
+                {historialServicios.length === 0 ? (
+                  <p style={{ color: "var(--color-texto-mutado)" }}>No hay servicios contratados aún.</p>
+                ) : (
+                  historialServicios.map((s) => (
+                    <div key={s.id} className="p-3 mb-2 rounded" style={{ border: "1px solid #E2E8F0" }}>
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div>
+                          <h6 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{s.nombre_ruta}</h6>
+                          <small style={{ color: "var(--color-texto-mutado)" }}>{s.origen} --- {s.destino}</small>
+                          <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginTop: "4px", marginBottom: 0 }}>
+                            Cliente: {s.cliente_email}
+                          </p>
+                        </div>
+                        <div className="text-end">
+                          <span style={{
+                            fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                            padding: "3px 10px", borderRadius: "20px",
+                            backgroundColor: s.estado === "completada" ? "#DCFCE7" : s.estado === "cancelada" ? "#FEE2E2" : "#DBEAFE",
+                            color: s.estado === "completada" ? "#166534" : s.estado === "cancelada" ? "#991B1B" : "#1D4ED8"
+                          }}>
+                            {s.estado}
+                          </span>
+                          <p className="fw-bold mb-0 mt-1" style={{ color: "var(--color-primario)", fontSize: "14px" }}>Q{parseFloat(s.ganancia_proveedor || 0).toFixed(2)}</p>
+                          <small style={{ color: "var(--color-texto-mutado)" }}>{new Date(s.fecha_inicio).toLocaleDateString()}</small>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Calificaciones */}
+            {vistaReporte === "calificaciones" && (
+              <div>
+                <div className="row mb-4">
+                  <div className="col-md-4">
+                    <div className="p-4 rounded text-center" style={{ backgroundColor: "var(--color-blanco)", border: "1px solid #E2E8F0" }}>
+                      <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase" }}>Calificación Promedio</p>
+                      <h1 className="fw-bold" style={{ color: "var(--color-primario)", fontSize: "48px" }}>{calificaciones.promedio_general}</h1>
+                      <p style={{ color: "var(--color-texto-mutado)" }}>de 5 estrellas</p>
+                    </div>
+                  </div>
+                  <div className="col-md-8">
+                    <div className="dashboard-card-custom">
+                      <h2 className="dashboard-card-title">Reseñas Recibidas</h2>
+                      {calificaciones.data.length === 0 ? (
+                        <p style={{ color: "var(--color-texto-mutado)" }}>No hay calificaciones aún.</p>
+                      ) : (
+                        calificaciones.data.map((c) => (
+                          <div key={c.id} className="p-3 mb-2 rounded" style={{ border: "1px solid #E2E8F0" }}>
+                            <div className="d-flex justify-content-between mb-1">
+                              <span className="fw-bold" style={{ color: "var(--color-secundario)", fontSize: "13px" }}>{c.cliente_email}</span>
+                              <span style={{ color: "var(--color-primario)", fontWeight: "700" }}>{"".repeat(c.puntuacion)}{"".repeat(5 - c.puntuacion)}</span>
+                            </div>
+                            <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px" }}>{c.nombre_ruta}</p>
+                            {c.comentario && <p style={{ fontSize: "13px", color: "var(--color-secundario)", margin: 0 }}>{c.comentario}</p>}
+                            <small style={{ color: "var(--color-texto-mutado)" }}>{new Date(c.created_at).toLocaleDateString()}</small>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Estado de rutas */}
+            {vistaReporte === "estado-rutas" && (
+              <div className="dashboard-card-custom">
+                <h2 className="dashboard-card-title">Estado de las Rutas</h2>
+                {estadoRutas.length === 0 ? (
+                  <p style={{ color: "var(--color-texto-mutado)" }}>No hay rutas registradas.</p>
+                ) : (
+                  estadoRutas.map((r) => (
+                    <div key={r.id} className="p-3 mb-2 rounded" style={{ border: "1px solid #E2E8F0" }}>
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <h6 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{r.nombre_ruta}</h6>
+                          <small style={{ color: "var(--color-texto-mutado)" }}>{r.origen} --- {r.destino} · Q{r.precio} · {r.tiempo_estimado || "N/A"}</small>
+                          <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", margin: "4px 0 0" }}>
+                            {r.total_reservaciones} reservaciones · {r.calificacion_promedio ? parseFloat(r.calificacion_promedio).toFixed(1) : "Sin calificaciones"}
+                          </p>
+                        </div>
+                        <span style={{
+                          fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                          padding: "4px 12px", borderRadius: "20px",
+                          backgroundColor: r.estado === "activa" ? "#DCFCE7" : r.estado === "suspendida" ? "#FEF9C3" : "#FEE2E2",
+                          color: r.estado === "activa" ? "#166534" : r.estado === "suspendida" ? "#854D0E" : "#991B1B"
+                        }}>
+                          {r.estado}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -728,7 +1289,7 @@ function DashboardEmpresa() {
                           {c.tipo_descuento === "porcentaje" ? `${c.valor_descuento}% OFF` : `Q${c.valor_descuento} OFF`}
                         </span>
                         <span style={{ color: "var(--color-texto-mutado)" }}>
-                          {new Date(c.fecha_inicio).toLocaleDateString()} → {new Date(c.fecha_fin).toLocaleDateString()}
+                          {new Date(c.fecha_inicio).toLocaleDateString()} --- {new Date(c.fecha_fin).toLocaleDateString()}
                         </span>
                       </div>
 
