@@ -488,13 +488,19 @@ const resolverCambioPerfil = async (req, res) => {
       return res.status(400).json({ success: false, message: "Esta solicitud ya fue resuelta." });
     }
 
+    // Obtenemos el correo y el rol para poder enviar la notificación correctamente
+    const usuarioInfo = await client.query(
+      "SELECT email, rol FROM usuarios WHERE id = $1", 
+      [solicitud.usuario_id]
+    );
+    const rol = usuarioInfo.rows[0]?.rol;
+    const emailDestino = usuarioInfo.rows[0]?.email;
+    const tabla = rol === "operador" ? "operadores_logisticos" : "empresas_transporte";
+
     if (accion === "aprobar") {
       const camposNuevos = solicitud.campos_nuevos;
       const sets = Object.keys(camposNuevos).map((k, i) => `${k} = $${i + 2}`).join(", ");
       const valores = Object.values(camposNuevos);
-
-      const rol = (await client.query("SELECT rol FROM usuarios WHERE id = $1", [solicitud.usuario_id])).rows[0]?.rol;
-      const tabla = rol === "operador" ? "operadores_logisticos" : "empresas_transporte";
 
       await client.query(
         `UPDATE ${tabla} SET ${sets} WHERE id = $1`,
@@ -512,8 +518,23 @@ const resolverCambioPerfil = async (req, res) => {
       );
     }
 
+    // --- NUEVO: PREPARACIÓN Y ENVÍO DEL CORREO ---
+    let asunto, titulo, mensaje;
+    if (accion === "aprobar") {
+      asunto = "¡Solicitud de cambio de perfil APROBADA! - TrackFlow-HUB";
+      titulo = "Cambios Aprobados";
+      mensaje = `Hola, te informamos que los cambios solicitados para tu perfil han sido revisados y <b>APROBADOS</b> por la administración.<br><br>Tu nueva información ya se encuentra visible y actualizada en la plataforma.`;
+    } else {
+      asunto = "Actualización sobre tu solicitud de perfil - TrackFlow-HUB";
+      titulo = "Solicitud Rechazada";
+      mensaje = `Hola, te informamos que tu solicitud de cambio de perfil ha sido <b>RECHAZADA</b>.<br><br><b>Motivo de la administración:</b> ${motivo_rechazo}.<br><br>Por favor, revisa tu información e intenta enviar una nueva solicitud si lo consideras necesario.`;
+    }
+
+    // Se dispara el correo antes del commit final
+    await enviarCorreo(emailDestino, asunto, titulo, mensaje, "");
+
     await client.query("COMMIT");
-    res.json({ success: true, message: `Solicitud ${accion === "aprobar" ? "aprobada" : "rechazada"} correctamente.` });
+    res.json({ success: true, message: `Solicitud ${accion === "aprobar" ? "aprobada" : "rechazada"} correctamente y se notificó al usuario.` });
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("Error al resolver cambio perfil:", error);
