@@ -1,5 +1,10 @@
 const db = require("../config/db");
 
+const decodeEscapedUnicode = (str) => {
+  if (!str || typeof str !== 'string') return str;
+  return str.replace(/\\u([0-9a-fA-F]{4})/g, (_match, grp) => String.fromCharCode(parseInt(grp, 16)));
+};
+
 const obtenerPerfil = async (req, res) => {
   const operadorId = req.usuario.id;
   try {
@@ -68,8 +73,123 @@ const verSolicitudesCambio = async (req, res) => {
   }
 };
 
+const reporteGanancias = async (req, res) => {
+  const operadorId = req.usuario.id;
+  try {
+    const { rows } = await db.pool.query(
+      `SELECT
+          s.id,
+          s.nombre_servicio,
+          s.zona_cobertura,
+          s.estado,
+          COUNT(r.id) FILTER (WHERE r.estado NOT IN ('cancelado', 'reembolsado')) AS total_reservaciones,
+          SUM(r.precio_total) FILTER (WHERE r.estado NOT IN ('cancelado', 'reembolsado')) AS ingresos_totales,
+          SUM(r.ganancia_proveedor) FILTER (WHERE r.estado NOT IN ('cancelado', 'reembolsado')) AS ganancias_operador,
+          SUM(r.comision_plataforma) FILTER (WHERE r.estado NOT IN ('cancelado', 'reembolsado')) AS comision_plataforma
+       FROM servicios_envio s
+       LEFT JOIN reservaciones r ON r.servicio_envio_id = s.id
+       WHERE s.operador_id = $1
+       GROUP BY s.id, s.nombre_servicio, s.zona_cobertura, s.estado
+       ORDER BY ganancias_operador DESC NULLS LAST`,
+      [operadorId]
+    );
+
+    const totales = rows.reduce((acc, row) => ({
+      total_reservaciones: acc.total_reservaciones + parseInt(row.total_reservaciones || 0),
+      ingresos_totales: acc.ingresos_totales + parseFloat(row.ingresos_totales || 0),
+      ganancias_operador: acc.ganancias_operador + parseFloat(row.ganancias_operador || 0),
+      comision_plataforma: acc.comision_plataforma + parseFloat(row.comision_plataforma || 0)
+    }), {
+      total_reservaciones: 0,
+      ingresos_totales: 0,
+      ganancias_operador: 0,
+      comision_plataforma: 0
+    });
+
+    const decoded = rows.map(r => ({
+      ...r,
+      nombre_servicio: decodeEscapedUnicode(r.nombre_servicio),
+      zona_cobertura: decodeEscapedUnicode(r.zona_cobertura)
+    }));
+
+    res.json({ success: true, data: decoded, totales });
+  } catch (error) {
+    console.error("Error en reporte ganancias operador:", error);
+    res.status(500).json({ success: false, message: "Error al obtener reporte de ganancias.", error: { details: error.message } });
+  }
+};
+
+const reporteGananciaPorServicio = async (req, res) => {
+  const operadorId = req.usuario.id;
+  const servicioId = req.params.servicioId;
+
+  try {
+    const { rows } = await db.pool.query(
+      `SELECT
+          s.id,
+          s.nombre_servicio,
+          s.descripcion,
+          s.zona_cobertura,
+          s.horario_disponible,
+          s.capacidad_carga_kg,
+          s.precio_envio,
+          s.estado,
+          COALESCE(json_agg(json_build_object(
+            'id', r.id,
+            'cliente_id', c.id,
+            'cliente_nombre', c.nombre,
+            'cliente_apellido', c.apellido,
+            'cliente_telefono', c.telefono,
+            'fecha_inicio', r.fecha_inicio,
+            'fecha_fin', r.fecha_fin,
+            'direccion_origen', r.direccion_origen,
+            'direccion_destino', r.direccion_destino,
+            'descripcion_paquete', r.descripcion_paquete,
+            'peso_paquete_kg', r.peso_paquete_kg,
+            'precio_total', r.precio_total,
+            'comision_plataforma', r.comision_plataforma,
+            'ganancia_proveedor', r.ganancia_proveedor,
+            'estado_reservacion', r.estado,
+            'fecha_cancelacion', r.fecha_cancelacion,
+            'motivo_cancelacion', r.motivo_cancelacion,
+            'created_at', r.created_at
+          )) FILTER (WHERE r.id IS NOT NULL), '[]') AS reservaciones
+       FROM servicios_envio s
+       LEFT JOIN reservaciones r ON r.servicio_envio_id = s.id AND r.estado NOT IN ('cancelado', 'reembolsado')
+       LEFT JOIN clientes c ON c.id = r.cliente_id
+       WHERE s.operador_id = $1 AND s.id = $2
+       GROUP BY s.id`,
+      [operadorId, servicioId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Servicio no encontrado o no pertenece al operador.' });
+    }
+
+    const servicio = rows[0];
+    servicio.nombre_servicio = decodeEscapedUnicode(servicio.nombre_servicio);
+    servicio.descripcion = decodeEscapedUnicode(servicio.descripcion);
+    servicio.zona_cobertura = decodeEscapedUnicode(servicio.zona_cobertura);
+    servicio.horario_disponible = decodeEscapedUnicode(servicio.horario_disponible);
+    servicio.reservaciones = servicio.reservaciones.map((reservacion) => ({
+      ...reservacion,
+      direccion_origen: decodeEscapedUnicode(reservacion.direccion_origen),
+      direccion_destino: decodeEscapedUnicode(reservacion.direccion_destino),
+      descripcion_paquete: decodeEscapedUnicode(reservacion.descripcion_paquete),
+      motivo_cancelacion: decodeEscapedUnicode(reservacion.motivo_cancelacion)
+    }));
+
+    res.json({ success: true, data: servicio });
+  } catch (error) {
+    console.error('Error en reporte de ganancia por servicio:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener el reporte por servicio.', error: { details: error.message } });
+  }
+};
+
 module.exports = {
   obtenerPerfil,
   solicitarCambioPerfil,
-  verSolicitudesCambio
+  verSolicitudesCambio,
+  reporteGanancias,
+  reporteGananciaPorServicio
 };

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
+import { jsPDF } from "jspdf";
 import "../../estilos/topNavbar.css";
 
 const formatearHora12 = (hora24) => {
@@ -42,6 +43,17 @@ function DashboardOperador() {
     zona_operacion: "",
     genero: "masculino"
   });
+  const [reporteGananciasOperador, setReporteGananciasOperador] = useState({
+    data: [],
+    totales: {
+      total_reservaciones: 0,
+      ingresos_totales: 0,
+      ganancias_operador: 0,
+      comision_plataforma: 0
+    }
+  });
+  const [cargandoReporteGanancias, setCargandoReporteGanancias] = useState(false);
+  const [errorReporteGanancias, setErrorReporteGanancias] = useState("");
 
   const token = localStorage.getItem("token");
 
@@ -82,6 +94,322 @@ function DashboardOperador() {
       }
     } catch (error) {
       console.error("Error al cargar solicitudes de cambio", error);
+    }
+  };
+
+  const cargarReporteGananciasOperador = async () => {
+    setCargandoReporteGanancias(true);
+    setErrorReporteGanancias("");
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/reportes/ganancias", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (respuesta.ok && data.success) {
+        setReporteGananciasOperador({
+          data: data.data || [],
+          totales: data.totales || {
+            total_reservaciones: 0,
+            ingresos_totales: 0,
+            ganancias_operador: 0,
+            comision_plataforma: 0
+          }
+        });
+      } else {
+        setErrorReporteGanancias(data.message || "Error al cargar reporte de ganancias.");
+      }
+    } catch (error) {
+      setErrorReporteGanancias("Error de conexión al servidor.");
+    } finally {
+      setCargandoReporteGanancias(false);
+    }
+  };
+
+  const crearDocumentoPdf = (titulo) => {
+    const doc = new jsPDF({ orientation: 'landscape', unit: "pt", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let y = 40;
+    const margin = 40;
+    const pageBottom = pageHeight - margin;
+    const maxWidth = pageWidth - margin * 2;
+
+    const agregarTexto = (texto, opciones = {}) => {
+      const ancho = maxWidth;
+      const lineas = doc.splitTextToSize(texto, ancho);
+      lineas.forEach((linea) => {
+        const nextLineHeight = opciones.lineHeight || 14;
+        if (y + nextLineHeight > pageBottom) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.setFontSize(opciones.fontSize || 10);
+        doc.text(linea, margin, y);
+        y += nextLineHeight;
+      });
+    };
+
+    const dibujarTabla = (headers, rows, options = {}) => {
+      // columnas y dimensiones
+      let columnWidths = options.columnWidths || [120, 90, 70, 55, 70, 70, 70];
+      const rowHeight = options.rowHeight || 18;
+      columnWidths = columnWidths.slice(0, headers.length);
+      let tableWidth = columnWidths.reduce((sum, w) => sum + w, 0);
+
+      // si la tabla excede el ancho máximo, escalar columnas proporcionalmente
+      if (tableWidth > maxWidth) {
+        const scale = maxWidth / tableWidth;
+        columnWidths = columnWidths.map((w) => Math.floor(w * scale));
+        tableWidth = columnWidths.reduce((s, w) => s + w, 0);
+      }
+
+      const drawHeader = () => {
+        let x = margin;
+        const headerLineHeight = options.lineHeight || 14;
+        // preparar líneas por columna para el encabezado
+        const headerLines = columnWidths.map((w, index) => {
+          const maxTextWidth = Math.max(w - 8, 10);
+          return doc.splitTextToSize(String(headers[index] || ""), maxTextWidth);
+        });
+        const headerHeights = headerLines.map((lines) => Math.max(lines.length * headerLineHeight, rowHeight));
+        const headerHeight = Math.max(...headerHeights, rowHeight);
+
+        if (y + headerHeight > pageBottom) {
+          doc.addPage();
+          y = margin;
+        }
+
+        doc.setFillColor(240, 240, 240);
+        doc.rect(x, y, tableWidth, headerHeight, "F");
+        doc.setDrawColor(180);
+        doc.rect(x, y, tableWidth, headerHeight);
+        doc.setFontSize(10);
+
+        columnWidths.forEach((w, index) => {
+          const lines = headerLines[index] || [""];
+          let textY = y + 13;
+          lines.forEach((line) => {
+            doc.text(String(line), x + 4, textY);
+            textY += headerLineHeight;
+          });
+          x += w;
+        });
+
+        y += headerHeight;
+      };
+
+      // dibujar encabezado
+      drawHeader();
+
+      // dibujar filas con ajuste de texto por columna
+      const cellLineHeight = options.lineHeight || 14;
+      rows.forEach((row) => {
+        // calcular líneas por celda y altura necesaria
+        const cellLines = row.map((cell, index) => {
+          const text = String(cell || "");
+          const colWidth = columnWidths[index] || 50;
+          const maxTextWidth = Math.max(colWidth - 8, 10);
+          return doc.splitTextToSize(text, maxTextWidth);
+        });
+
+        const cellHeights = cellLines.map((lines) => Math.max(lines.length * cellLineHeight, rowHeight));
+        const maxCellHeight = Math.max(...cellHeights, rowHeight);
+
+        if (y + maxCellHeight > pageBottom) {
+          // nueva página -> re-dibujar encabezado en la nueva hoja
+          drawHeader();
+        }
+
+        let x = margin;
+        // dibujar cada celda (borde + texto multilinea)
+        columnWidths.forEach((w, index) => {
+          doc.setDrawColor(180);
+          doc.rect(x, y, w, maxCellHeight);
+          const lines = cellLines[index] || [""];
+          doc.setFontSize(10);
+          let textY = y + 13;
+          lines.forEach((line) => {
+            doc.text(String(line), x + 4, textY);
+            textY += cellLineHeight;
+          });
+          x += w;
+        });
+
+        y += maxCellHeight;
+      });
+
+      y += 10;
+    };
+
+    doc.setFontSize(16);
+    doc.text(titulo, margin, y);
+    y += 24;
+
+    return { doc, agregarTexto, dibujarTabla, yRef: () => y, setY: (valor) => { y = valor; } };
+  };
+
+  const generarPDF = (mode = "general") => {
+    try {
+      const { data, totales } = reporteGananciasOperador;
+      const title = `Reporte de Ganancias - ${perfil?.email || ""}`;
+      const { doc, agregarTexto, dibujarTabla, setY } = crearDocumentoPdf(title);
+
+      agregarTexto(`Generado: ${new Date().toLocaleString()}`, { fontSize: 10, lineHeight: 16 });
+      agregarTexto(" ");
+      agregarTexto("Resumen General", { fontSize: 12, lineHeight: 16 });
+      agregarTexto(`Reservaciones: ${totales.total_reservaciones}`);
+      agregarTexto(`Ingresos: Q${parseFloat(totales.ingresos_totales || 0).toFixed(2)}`);
+      agregarTexto(`Ganancias: Q${parseFloat(totales.ganancias_operador || 0).toFixed(2)}`);
+      agregarTexto(`Comisión Plataforma: Q${parseFloat(totales.comision_plataforma || 0).toFixed(2)}`);
+      agregarTexto(" ");
+      agregarTexto("Detalle por Servicio", { fontSize: 12, lineHeight: 16 });
+
+      const rows = data.map((s) => [
+        s.nombre_servicio || "",
+        s.zona_cobertura || "",
+        s.estado || "",
+        s.total_reservaciones || 0,
+        `Q${parseFloat(s.ingresos_totales || 0).toFixed(2)}`,
+        `Q${parseFloat(s.ganancias_operador || 0).toFixed(2)}`,
+        `Q${parseFloat(s.comision_plataforma || 0).toFixed(2)}`
+      ]);
+
+      dibujarTabla([
+        "Servicio",
+        "Zona",
+        "Estado",
+        "Reservaciones",
+        "Ingresos",
+        "Ganancias",
+        "Comisión"
+      ], rows, { columnWidths: [130, 90, 65, 110, 80, 80, 80] });
+
+      if (mode === "por_servicio") {
+        data.forEach((s) => {
+          agregarTexto(" ");
+          agregarTexto(`Detalle del servicio: ${s.nombre_servicio || ""}`, { fontSize: 12, lineHeight: 16 });
+          agregarTexto(`Descripción: ${s.descripcion || "N/A"}`);
+          agregarTexto(`Zona: ${s.zona_cobertura || "N/A"} | Estado: ${s.estado || "N/A"}`);
+          agregarTexto(`Horario: ${s.horario_disponible || "N/A"} | Capacidad: ${s.capacidad_carga_kg || "N/A"} kg | Precio envío: Q${parseFloat(s.precio_envio || 0).toFixed(2)}`);
+          agregarTexto(" ");
+
+          const servicioRows = (s.reservaciones || []).map((r) => [
+            `${r.cliente_nombre || ""} ${r.cliente_apellido || ""}`,
+            `${r.fecha_inicio || ""}${r.fecha_fin ? ` - ${r.fecha_fin}` : ""}`,
+            r.direccion_origen || "",
+            r.direccion_destino || "",
+            `${parseFloat(r.peso_paquete_kg || 0).toFixed(2)} kg`,
+            `Q${parseFloat(r.precio_total || 0).toFixed(2)}`,
+            `Q${parseFloat(r.ganancia_proveedor || 0).toFixed(2)}`,
+            `Q${parseFloat(r.comision_plataforma || 0).toFixed(2)}`,
+            r.estado_reservacion || ""
+          ]);
+
+          if (servicioRows.length > 0) {
+            dibujarTabla([
+              "Cliente",
+              "Fecha",
+              "Origen",
+              "Destino",
+              "Peso",
+              "Precio",
+              "Ganancia",
+              "Comisión",
+              "Estado"
+            ], servicioRows, { columnWidths: [100, 80, 80, 80, 55, 55, 60, 60, 45] });
+          } else {
+            agregarTexto("No hay reservaciones disponibles.");
+          }
+        });
+      }
+
+      agregarTexto(" ");
+      agregarTexto("Reporte generado desde TrackFlow-HUB", { fontSize: 9, lineHeight: 14 });
+      doc.save(`reporte_ganancias_${Date.now()}.pdf`);
+    } catch (err) {
+      console.error("Error generando PDF:", err);
+      alert("No se pudo generar el PDF.");
+    }
+  };
+  const cargarReporteServicioDetalle = async (servicioId) => {
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/reportes/servicio/${servicioId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (!respuesta.ok || !data.success) {
+        throw new Error(data.message || 'No se pudo obtener el detalle del servicio.');
+      }
+      return data.data;
+    } catch (error) {
+      console.error('Error cargando reporte por servicio:', error);
+      Swal.fire({
+        title: 'Error',
+        text: error.message || 'No se pudo cargar el reporte por servicio.',
+        icon: 'error'
+      });
+      return null;
+    }
+  };
+
+  const generarPDFServicio = async (servicioId) => {
+    const servicio = await cargarReporteServicioDetalle(servicioId);
+    if (!servicio) return;
+
+    try {
+      const title = `Reporte Detallado - ${servicio.nombre_servicio || ''}`;
+      const pdfName = `reporte_servicio_${servicio.id}_${Date.now()}.pdf`;
+      const { doc, agregarTexto, dibujarTabla } = crearDocumentoPdf(title);
+
+      agregarTexto(`Generado: ${new Date().toLocaleString()}`, { fontSize: 10, lineHeight: 16 });
+      agregarTexto(' ');
+      agregarTexto(`Servicio: ${servicio.nombre_servicio || ''}`, { fontSize: 12, lineHeight: 18 });
+      agregarTexto(`Descripción: ${servicio.descripcion || 'N/A'}`);
+      agregarTexto(`Zona: ${servicio.zona_cobertura || 'N/A'} | Estado: ${servicio.estado || 'N/A'}`);
+      agregarTexto(`Horario: ${servicio.horario_disponible || 'N/A'} | Capacidad: ${servicio.capacidad_carga_kg || 'N/A'} kg | Precio: Q${parseFloat(servicio.precio_envio || 0).toFixed(2)}`);
+      agregarTexto(' ');
+      agregarTexto('Reservaciones del servicio', { fontSize: 12, lineHeight: 18 });
+
+      const rows = (servicio.reservaciones || []).map((r) => [
+        `${r.cliente_nombre || ''} ${r.cliente_apellido || ''}`,
+        `${r.fecha_inicio || ''}${r.fecha_fin ? ` - ${r.fecha_fin}` : ''}`,
+        r.direccion_origen || '',
+        r.direccion_destino || '',
+        `${parseFloat(r.peso_paquete_kg || 0).toFixed(2)} kg`,
+        `Q${parseFloat(r.precio_total || 0).toFixed(2)}`,
+        `Q${parseFloat(r.ganancia_proveedor || 0).toFixed(2)}`,
+        `Q${parseFloat(r.comision_plataforma || 0).toFixed(2)}`,
+        r.estado_reservacion || ''
+      ]);
+
+      if (rows.length > 0) {
+        dibujarTabla([
+          'Cliente',
+          'Fecha',
+          'Origen',
+          'Destino',
+          'Peso',
+          'Precio',
+          'Ganancia',
+          'Comisión',
+          'Estado'
+        ], rows, {
+          columnWidths: [90, 70, 80, 80, 45, 55, 60, 60, 55]
+        });
+      } else {
+        agregarTexto('No hay reservaciones para este servicio.');
+      }
+
+      agregarTexto(' ');
+      agregarTexto('Reporte generado desde TrackFlow-HUB', { fontSize: 9, lineHeight: 14 });
+      doc.save(pdfName);
+    } catch (err) {
+      console.error('Error generando PDF por servicio:', err);
+      alert('No se pudo generar el PDF por servicio.');
     }
   };
 
@@ -197,6 +525,8 @@ function DashboardOperador() {
     } else if (vista === "perfil") {
       cargarPerfil();
       cargarSolicitudesCambio();
+    } else if (vista === "reportes") {
+      cargarReporteGananciasOperador();
     }
   }, [vista]);
 
@@ -856,6 +1186,100 @@ function DashboardOperador() {
 
         {vista === "reportes" && (
           <div className="row">
+            <div className="col-12 mb-4">
+              <div className="dashboard-card-custom">
+                <h2 className="dashboard-card-title">Reporte de Ganancias</h2>
+                <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                  <p className="text-muted mb-0">Resumen de ingresos y ganancias por servicio.</p>
+                  <div className="d-flex gap-2">
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={cargarReporteGananciasOperador}
+                      disabled={cargandoReporteGanancias}
+                    >
+                      {cargandoReporteGanancias ? "Actualizando..." : "Actualizar"}
+                    </button>
+                    <button className="btn btn-sm btn-outline-secondary" onClick={generarPDF}>
+                      Descargar .PDF general
+                    </button>
+                  </div>
+                </div>
+                {errorReporteGanancias && (
+                  <div className="alert alert-danger py-2">{errorReporteGanancias}</div>
+                )}
+                {cargandoReporteGanancias ? (
+                  <p className="text-muted">Cargando datos...</p>
+                ) : reporteGananciasOperador.data.length === 0 ? (
+                  <p className="text-muted">No hay datos de ganancias disponibles.</p>
+                ) : (
+                  <>
+                    <div className="row mb-3 text-center">
+                      <div className="col-md-3 mb-2">
+                        <div className="p-3 rounded bg-light border">
+                          <div className="text-muted" style={{ fontSize: "12px" }}>Reservaciones</div>
+                          <div className="fs-5 fw-bold">{reporteGananciasOperador.totales.total_reservaciones}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-3 mb-2">
+                        <div className="p-3 rounded bg-light border">
+                          <div className="text-muted" style={{ fontSize: "12px" }}>Ingresos</div>
+                          <div className="fs-5 fw-bold">Q{reporteGananciasOperador.totales.ingresos_totales.toFixed(2)}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-3 mb-2">
+                        <div className="p-3 rounded bg-light border">
+                          <div className="text-muted" style={{ fontSize: "12px" }}>Ganancias</div>
+                          <div className="fs-5 fw-bold">Q{reporteGananciasOperador.totales.ganancias_operador.toFixed(2)}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-3 mb-2">
+                        <div className="p-3 rounded bg-light border">
+                          <div className="text-muted" style={{ fontSize: "12px" }}>Comisión</div>
+                          <div className="fs-5 fw-bold">Q{reporteGananciasOperador.totales.comision_plataforma.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="table-responsive">
+                      <table className="table table-sm table-hover">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Servicio</th>
+                            <th>Zona</th>
+                            <th>Estado</th>
+                            <th className="text-end">Reservaciones</th>
+                            <th className="text-end">Ingresos</th>
+                            <th className="text-end">Ganancias</th>
+                            <th className="text-end">Comisión</th>
+                            <th className="text-end">Exportar</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reporteGananciasOperador.data.map((serv) => (
+                            <tr key={serv.id}>
+                              <td>{serv.nombre_servicio}</td>
+                              <td>{serv.zona_cobertura}</td>
+                              <td>{serv.estado}</td>
+                              <td className="text-end">{serv.total_reservaciones || 0}</td>
+                              <td className="text-end">Q{parseFloat(serv.ingresos_totales || 0).toFixed(2)}</td>
+                              <td className="text-end">Q{parseFloat(serv.ganancias_operador || 0).toFixed(2)}</td>
+                              <td className="text-end">Q{parseFloat(serv.comision_plataforma || 0).toFixed(2)}</td>
+                              <td className="text-end">
+                                <button
+                                  className="btn btn-sm btn-outline-secondary"
+                                  onClick={() => generarPDFServicio(serv.id)}
+                                >
+                                .PDF detallado
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
             <div className="col-md-6">
               <div className="dashboard-card-custom">
                 <h2 className="dashboard-card-title">Reportar Cliente</h2>

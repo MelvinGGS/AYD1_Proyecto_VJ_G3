@@ -1,5 +1,11 @@
 const db = require("../config/db");
 
+// Decodifica secuencias unicode escapadas como "\u00f3" -> "ó"
+const decodeEscapedUnicode = (str) => {
+  if (!str || typeof str !== 'string') return str;
+  return str.replace(/\\u([0-9a-fA-F]{4})/g, (_match, grp) => String.fromCharCode(parseInt(grp, 16)));
+};
+
 const crearServicio = async (req, res) => {
   const {
     nombre_servicio,
@@ -73,8 +79,8 @@ const crearServicio = async (req, res) => {
       message: "Servicio creado exitosamente.",
       data: {
         id: servicio.id,
-        nombre_servicio: servicio.nombre_servicio,
-        zona_cobertura: servicio.zona_cobertura,
+        nombre_servicio: decodeEscapedUnicode(servicio.nombre_servicio),
+        zona_cobertura: decodeEscapedUnicode(servicio.zona_cobertura),
         capacidad_carga_kg: parseFloat(servicio.capacidad_carga_kg),
         precio_envio: parseFloat(servicio.precio_envio),
         estado: servicio.estado,
@@ -157,13 +163,13 @@ const listarMisServicios = async (req, res) => {
 
     const items = rows.map(r => ({
       id: r.id,
-      nombre_servicio: r.nombre_servicio,
-      descripcion: r.descripcion,
-      zona_cobertura: r.zona_cobertura,
+      nombre_servicio: decodeEscapedUnicode(r.nombre_servicio),
+      descripcion: decodeEscapedUnicode(r.descripcion),
+      zona_cobertura: decodeEscapedUnicode(r.zona_cobertura),
       capacidad_carga_kg: parseFloat(r.capacidad_carga_kg),
       precio_envio: parseFloat(r.precio_envio),
       estado: r.estado,
-      horario_disponible: r.horario_disponible,
+      horario_disponible: decodeEscapedUnicode(r.horario_disponible),
       calificacion_promedio: parseFloat(r.calificacion_promedio || 0),
       total_calificaciones: parseInt(r.total_calificaciones || 0),
       fotos: r.fotos || [],
@@ -313,13 +319,13 @@ const actualizarServicio = async (req, res) => {
       success: true,
       message: "Servicio modificado exitosamente.",
       data: {
-        id: servicioActualizado.id,
-        nombre_servicio: servicioActualizado.nombre_servicio,
-        descripcion: servicioActualizado.descripcion,
-        zona_cobertura: servicioActualizado.zona_cobertura,
+          id: servicioActualizado.id,
+          nombre_servicio: decodeEscapedUnicode(servicioActualizado.nombre_servicio),
+          descripcion: decodeEscapedUnicode(servicioActualizado.descripcion),
+          zona_cobertura: decodeEscapedUnicode(servicioActualizado.zona_cobertura),
         capacidad_carga_kg: parseFloat(servicioActualizado.capacidad_carga_kg),
         precio_envio: parseFloat(servicioActualizado.precio_envio),
-        horario_disponible: servicioActualizado.horario_disponible,
+          horario_disponible: decodeEscapedUnicode(servicioActualizado.horario_disponible),
         estado: servicioActualizado.estado,
         created_at: servicioActualizado.created_at,
         updated_at: servicioActualizado.updated_at

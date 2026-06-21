@@ -33,5 +33,7 @@ router.patch("/servicios/:id/estado", operadorServicioController.cambiarEstadoSe
 router.get("/perfil", operadorController.obtenerPerfil);
 router.post("/perfil/solicitar-cambio", operadorController.solicitarCambioPerfil);
 router.get("/perfil/solicitudes", operadorController.verSolicitudesCambio);
+router.get("/reportes/ganancias", operadorController.reporteGanancias);
+router.get("/reportes/servicio/:servicioId", operadorController.reporteGananciaPorServicio);
 
 module.exports = router;
