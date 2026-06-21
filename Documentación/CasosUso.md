@@ -1,5 +1,8 @@
 # Casos de Uso
 
+## CU-General: Sistema TrackFlow-HUB
+![CU-General: Sistema TrackFlow-HUB](Diagramas/Diagrama-CU-General.jpg)
+
 ## CU-01: Proceso de Reservación de Servicios
 ![CU-01: Proceso de Reservación de Servicios](Diagramas/Diagrama-CU-1.jpg)
 
