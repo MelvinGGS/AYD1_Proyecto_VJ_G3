@@ -2,6 +2,9 @@ const express = require("express");
 const router = express.Router();
 const operadorServicioController = require("../controllers/operadorServicioController");
 const operadorController = require("../controllers/operadorController");
+const operadorCalificacionController = require("../controllers/operadorCalificacionController");
+const operadorCalendarioController = require("../controllers/operadorCalendarioController");
+const operadorCuponController = require("../controllers/operadorCuponController");
 const authMiddleware = require("../middlewares/auth");
 const upload = require("../middlewares/upload");
 
@@ -33,5 +36,18 @@ router.patch("/servicios/:id/estado", operadorServicioController.cambiarEstadoSe
 router.get("/perfil", operadorController.obtenerPerfil);
 router.post("/perfil/solicitar-cambio", operadorController.solicitarCambioPerfil);
 router.get("/perfil/solicitudes", operadorController.verSolicitudesCambio);
+
+// Rutas de calificaciones y respuestas
+router.get("/calificaciones", operadorCalificacionController.listarCalificaciones);
+router.post("/calificaciones/:id/respuesta", operadorCalificacionController.responderCalificacion);
+
+// Calendario mensual de envios programados
+router.get("/calendario", operadorCalendarioController.obtenerCalendario);
+
+// Gestion de cupones para clientes del operador
+router.get("/cupones/clientes", operadorCuponController.listarClientesElegibles);
+router.get("/cupones", operadorCuponController.listarCupones);
+router.post("/cupones", operadorCuponController.crearCupon);
+router.patch("/cupones/:id/desactivar", operadorCuponController.desactivarCupon);
 
 module.exports = router;

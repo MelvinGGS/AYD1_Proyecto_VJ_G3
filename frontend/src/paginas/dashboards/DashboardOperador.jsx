@@ -13,6 +13,79 @@ const formatearHora12 = (hora24) => {
   return `${horas}:${minutosStr} ${ampm}`;
 };
 
+const formatearFecha = (fecha) => new Intl.DateTimeFormat("es-GT", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric"
+}).format(new Date(fecha));
+
+const claveFechaLocal = (fecha) => [
+  fecha.getFullYear(),
+  String(fecha.getMonth() + 1).padStart(2, "0"),
+  String(fecha.getDate()).padStart(2, "0")
+].join("-");
+
+const fechaDesdeClave = (clave) => {
+  const [anio, mes, dia] = clave.split("-").map(Number);
+  return new Date(anio, mes - 1, dia);
+};
+
+const obtenerCeldasMes = (mesActual) => {
+  const anio = mesActual.getFullYear();
+  const mes = mesActual.getMonth();
+  const primerDia = new Date(anio, mes, 1);
+  const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+  const espaciosIniciales = (primerDia.getDay() + 6) % 7;
+  const totalCeldas = Math.ceil((espaciosIniciales + ultimoDia) / 7) * 7;
+
+  return Array.from({ length: totalCeldas }, (_, indice) => {
+    const numeroDia = indice - espaciosIniciales + 1;
+    return numeroDia > 0 && numeroDia <= ultimoDia
+      ? new Date(anio, mes, numeroDia)
+      : null;
+  });
+};
+
+const agruparEnviosPorDia = (reservaciones, mesActual) => {
+  const eventos = {};
+  const inicioMes = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1);
+  const finMes = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0);
+
+  reservaciones.forEach((reservacion) => {
+    const inicioReserva = fechaDesdeClave(reservacion.fecha_inicio);
+    const finReserva = fechaDesdeClave(reservacion.fecha_fin);
+    const inicio = inicioReserva < inicioMes ? inicioMes : inicioReserva;
+    const fin = finReserva > finMes ? finMes : finReserva;
+
+    for (let fecha = new Date(inicio); fecha <= fin; fecha.setDate(fecha.getDate() + 1)) {
+      const clave = claveFechaLocal(fecha);
+      let tipo = "en_curso";
+      if (clave === reservacion.fecha_inicio && clave === reservacion.fecha_fin) tipo = "recoleccion_entrega";
+      else if (clave === reservacion.fecha_inicio) tipo = "recoleccion";
+      else if (clave === reservacion.fecha_fin) tipo = "entrega";
+
+      eventos[clave] = [...(eventos[clave] || []), { ...reservacion, tipo_evento: tipo }];
+    }
+  });
+
+  return eventos;
+};
+
+const formularioCuponInicial = () => {
+  const hoy = new Date();
+  const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, hoy.getDate());
+  return {
+    codigo: "",
+    descripcion: "",
+    tipo_descuento: "porcentaje",
+    valor_descuento: "",
+    monto_minimo: "",
+    usos_maximos: "",
+    fecha_inicio: claveFechaLocal(hoy),
+    fecha_fin: claveFechaLocal(fin)
+  };
+};
+
 function DashboardOperador() {
   const navigate = useNavigate();
   const [vista, setVista] = useState("inicio");
@@ -20,6 +93,34 @@ function DashboardOperador() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
+  const [calificaciones, setCalificaciones] = useState([]);
+  const [resumenCalificaciones, setResumenCalificaciones] = useState({
+    promedio: 0,
+    total: 0,
+    pendientes_respuesta: 0
+  });
+  const [respuestas, setRespuestas] = useState({});
+  const [cargandoCalificaciones, setCargandoCalificaciones] = useState(false);
+  const [errorCalificaciones, setErrorCalificaciones] = useState("");
+  const [respondiendoId, setRespondiendoId] = useState(null);
+  const [mesCalendario, setMesCalendario] = useState(() => {
+    const hoy = new Date();
+    return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  });
+  const [reservacionesCalendario, setReservacionesCalendario] = useState([]);
+  const [serviciosCalendario, setServiciosCalendario] = useState([]);
+  const [servicioCalendario, setServicioCalendario] = useState("");
+  const [diaSeleccionado, setDiaSeleccionado] = useState(null);
+  const [cargandoCalendario, setCargandoCalendario] = useState(false);
+  const [errorCalendario, setErrorCalendario] = useState("");
+  const [cuponesOperador, setCuponesOperador] = useState([]);
+  const [clientesCupon, setClientesCupon] = useState([]);
+  const [clientesSeleccionados, setClientesSeleccionados] = useState([]);
+  const [formCupon, setFormCupon] = useState(formularioCuponInicial);
+  const [cargandoCupones, setCargandoCupones] = useState(false);
+  const [guardandoCupon, setGuardandoCupon] = useState(false);
+  const [errorCupon, setErrorCupon] = useState("");
+  const [mensajeCupon, setMensajeCupon] = useState("");
 
   const [editandoId, setEditandoId] = useState(null);
   const [nombreServicio, setNombreServicio] = useState("");
@@ -82,6 +183,225 @@ function DashboardOperador() {
       }
     } catch (error) {
       console.error("Error al cargar solicitudes de cambio", error);
+    }
+  };
+
+  const cargarCalificaciones = async () => {
+    setCargandoCalificaciones(true);
+    setErrorCalificaciones("");
+
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/calificaciones", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        setErrorCalificaciones(data.message || "No se pudieron cargar las calificaciones.");
+        return;
+      }
+
+      setCalificaciones(data.data.items || []);
+      setResumenCalificaciones(data.data.resumen || {
+        promedio: 0,
+        total: 0,
+        pendientes_respuesta: 0
+      });
+    } catch {
+      setErrorCalificaciones("No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoCalificaciones(false);
+    }
+  };
+
+  const responderCalificacion = async (calificacionId) => {
+    const textoRespuesta = (respuestas[calificacionId] || "").trim();
+
+    if (!textoRespuesta) {
+      setErrorCalificaciones("Escribe una respuesta antes de publicarla.");
+      return;
+    }
+
+    setRespondiendoId(calificacionId);
+    setErrorCalificaciones("");
+
+    try {
+      const respuesta = await fetch(
+        `http://localhost:3000/api/operador/calificaciones/${calificacionId}/respuesta`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ respuesta: textoRespuesta })
+        }
+      );
+      const data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        setErrorCalificaciones(data.message || "No se pudo publicar la respuesta.");
+        return;
+      }
+
+      setRespuestas((actuales) => ({ ...actuales, [calificacionId]: "" }));
+      await cargarCalificaciones();
+      await Swal.fire({
+        title: "Respuesta publicada",
+        text: "Tu respuesta quedo guardada junto a la resena.",
+        confirmButtonText: "Aceptar"
+      });
+    } catch {
+      setErrorCalificaciones("No se pudo conectar con el servidor.");
+    } finally {
+      setRespondiendoId(null);
+    }
+  };
+
+  const cargarCalendario = async () => {
+    const inicioMes = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), 1);
+    const finMes = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() + 1, 0);
+    const parametros = new URLSearchParams({
+      desde: claveFechaLocal(inicioMes),
+      hasta: claveFechaLocal(finMes)
+    });
+
+    if (servicioCalendario) parametros.set("servicio_id", servicioCalendario);
+
+    setCargandoCalendario(true);
+    setErrorCalendario("");
+
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/calendario?${parametros}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        setErrorCalendario(data.message || "No se pudo cargar el calendario.");
+        return;
+      }
+
+      const reservaciones = data.data.reservaciones || [];
+      const eventos = agruparEnviosPorDia(reservaciones, mesCalendario);
+      const hoy = claveFechaLocal(new Date());
+      const prefijoMes = claveFechaLocal(inicioMes).slice(0, 7);
+
+      setReservacionesCalendario(reservaciones);
+      setServiciosCalendario(data.data.servicios || []);
+      setDiaSeleccionado((actual) => {
+        if (actual?.startsWith(prefijoMes)) return actual;
+        if (hoy.startsWith(prefijoMes)) return hoy;
+        return Object.keys(eventos).sort()[0] || claveFechaLocal(inicioMes);
+      });
+    } catch {
+      setErrorCalendario("No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoCalendario(false);
+    }
+  };
+
+  const cambiarMesCalendario = (cantidad) => {
+    setMesCalendario((actual) => new Date(actual.getFullYear(), actual.getMonth() + cantidad, 1));
+  };
+
+  const cargarGestionCupones = async () => {
+    setCargandoCupones(true);
+    setErrorCupon("");
+
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [respuestaCupones, respuestaClientes] = await Promise.all([
+        fetch("http://localhost:3000/api/operador/cupones", { headers }),
+        fetch("http://localhost:3000/api/operador/cupones/clientes", { headers })
+      ]);
+      const [dataCupones, dataClientes] = await Promise.all([
+        respuestaCupones.json(),
+        respuestaClientes.json()
+      ]);
+
+      if (!respuestaCupones.ok || !respuestaClientes.ok) {
+        setErrorCupon(dataCupones.message || dataClientes.message || "No se pudo cargar la gestion de cupones.");
+        return;
+      }
+
+      setCuponesOperador(dataCupones.data || []);
+      setClientesCupon(dataClientes.data || []);
+    } catch {
+      setErrorCupon("No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoCupones(false);
+    }
+  };
+
+  const alternarClienteCupon = (clienteId) => {
+    setClientesSeleccionados((actuales) => actuales.includes(clienteId)
+      ? actuales.filter((id) => id !== clienteId)
+      : [...actuales, clienteId]);
+  };
+
+  const crearCuponOperador = async (evento) => {
+    evento.preventDefault();
+    setErrorCupon("");
+    setMensajeCupon("");
+
+    if (clientesSeleccionados.length === 0) {
+      setErrorCupon("Selecciona al menos un cliente beneficiario.");
+      return;
+    }
+
+    setGuardandoCupon(true);
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/cupones", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ ...formCupon, cliente_ids: clientesSeleccionados })
+      });
+      const data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        setErrorCupon(data.message || "No se pudo crear el cupon.");
+        return;
+      }
+
+      setMensajeCupon(`${data.message} Correos enviados: ${data.data.correos_enviados}/${data.data.total_beneficiarios}.`);
+      setFormCupon(formularioCuponInicial());
+      setClientesSeleccionados([]);
+      await cargarGestionCupones();
+    } catch {
+      setErrorCupon("No se pudo conectar con el servidor.");
+    } finally {
+      setGuardandoCupon(false);
+    }
+  };
+
+  const desactivarCuponOperador = async (cupon) => {
+    const confirmacion = await Swal.fire({
+      title: "Desactivar cupon",
+      text: `El codigo ${cupon.codigo} dejara de estar disponible para sus beneficiarios.`,
+      showCancelButton: true,
+      confirmButtonText: "Desactivar",
+      cancelButtonText: "Cancelar"
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/cupones/${cupon.id}/desactivar`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await respuesta.json();
+      if (!respuesta.ok) {
+        setErrorCupon(data.message || "No se pudo desactivar el cupon.");
+        return;
+      }
+      setMensajeCupon(data.message);
+      await cargarGestionCupones();
+    } catch {
+      setErrorCupon("No se pudo conectar con el servidor.");
     }
   };
 
@@ -194,11 +514,17 @@ function DashboardOperador() {
   useEffect(() => {
     if (vista === "servicios") {
       cargarServicios();
+    } else if (vista === "calendario") {
+      cargarCalendario();
+    } else if (vista === "calificaciones") {
+      cargarCalificaciones();
+    } else if (vista === "cupones") {
+      cargarGestionCupones();
     } else if (vista === "perfil") {
       cargarPerfil();
       cargarSolicitudesCambio();
     }
-  }, [vista]);
+  }, [vista, mesCalendario, servicioCalendario]);
 
   const manejarRegistroServicio = async (e) => {
     e.preventDefault();
@@ -437,6 +763,28 @@ function DashboardOperador() {
     localStorage.removeItem("token");
     localStorage.removeItem("rol");
     navigate("/");
+  };
+
+  const celdasCalendario = obtenerCeldasMes(mesCalendario);
+  const eventosCalendario = agruparEnviosPorDia(reservacionesCalendario, mesCalendario);
+  const enviosDiaSeleccionado = diaSeleccionado ? eventosCalendario[diaSeleccionado] || [] : [];
+  const nombreMesCalendario = new Intl.DateTimeFormat("es-GT", {
+    month: "long",
+    year: "numeric"
+  }).format(mesCalendario);
+  const tituloDiaSeleccionado = diaSeleccionado
+    ? new Intl.DateTimeFormat("es-GT", {
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    }).format(fechaDesdeClave(diaSeleccionado))
+    : "Selecciona un dia";
+
+  const etiquetaEvento = {
+    recoleccion: "Recoleccion",
+    entrega: "Entrega",
+    en_curso: "En curso",
+    recoleccion_entrega: "Recoleccion y entrega"
   };
 
   return (
@@ -812,17 +1160,124 @@ function DashboardOperador() {
           <div className="row">
             <div className="col-12">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Calendario de Envíos Programados</h2>
-                <p className="text-muted">Fechas reservadas por los clientes para recolección y entrega.</p>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-2 border rounded bg-light">
-                    <div className="d-flex w-100 justify-content-between">
-                      <h6 className="fw-bold">Fecha: 19/06/2026</h6>
-                      <small className="text-primary fw-bold">Q45.00</small>
-                    </div>
-                    <p className="mb-0 text-muted">Cliente: Juan Pérez. Dirección de recolección: Zona 10. Paquete: Documentos.</p>
+                <div className="calendar-header">
+                  <div>
+                    <h2 className="dashboard-card-title mb-1">Calendario de envios programados</h2>
+                    <p className="text-muted mb-0">Consulta las recolecciones, envios en curso y entregas de todos tus servicios.</p>
+                  </div>
+                  <div className="calendar-filter">
+                    <label htmlFor="servicio-calendario">Vista por servicio</label>
+                    <select
+                      id="servicio-calendario"
+                      className="form-select form-select-sm"
+                      value={servicioCalendario}
+                      onChange={(evento) => setServicioCalendario(evento.target.value)}
+                    >
+                      <option value="">Todos mis servicios</option>
+                      {serviciosCalendario.map((servicio) => (
+                        <option value={servicio.id} key={servicio.id}>{servicio.nombre_servicio}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
+
+                {errorCalendario && <div className="alert alert-danger mt-3" role="alert">{errorCalendario}</div>}
+
+                <div className="calendar-toolbar">
+                  <button type="button" className="calendar-nav-button" onClick={() => cambiarMesCalendario(-1)} aria-label="Mes anterior">‹</button>
+                  <h3>{nombreMesCalendario}</h3>
+                  <button type="button" className="calendar-nav-button" onClick={() => cambiarMesCalendario(1)} aria-label="Mes siguiente">›</button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm calendar-today-button"
+                    onClick={() => {
+                      const hoy = new Date();
+                      setMesCalendario(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+                      setDiaSeleccionado(claveFechaLocal(hoy));
+                    }}
+                  >
+                    Hoy
+                  </button>
+                </div>
+
+                <div className={`calendar-month ${cargandoCalendario ? "calendar-loading" : ""}`}>
+                  {["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"].map((dia) => (
+                    <div className="calendar-weekday" key={dia}>{dia}</div>
+                  ))}
+
+                  {celdasCalendario.map((fecha, indice) => {
+                    if (!fecha) return <div className="calendar-day calendar-day-empty" key={`vacio-${indice}`} />;
+
+                    const clave = claveFechaLocal(fecha);
+                    const eventos = eventosCalendario[clave] || [];
+                    const esHoy = clave === claveFechaLocal(new Date());
+                    const estaSeleccionado = clave === diaSeleccionado;
+
+                    return (
+                      <button
+                        type="button"
+                        className={`calendar-day ${esHoy ? "is-today" : ""} ${estaSeleccionado ? "is-selected" : ""}`}
+                        key={clave}
+                        onClick={() => setDiaSeleccionado(clave)}
+                      >
+                        <span className="calendar-day-number">{fecha.getDate()}</span>
+                        <span className="calendar-events">
+                          {eventos.slice(0, 3).map((evento) => (
+                            <span className={`calendar-event event-${evento.tipo_evento}`} key={`${evento.id}-${evento.tipo_evento}`}>
+                              <b>{etiquetaEvento[evento.tipo_evento]}</b>
+                              <span>{evento.nombre_servicio}</span>
+                            </span>
+                          ))}
+                          {eventos.length > 3 && <span className="calendar-more">+{eventos.length - 3} mas</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="calendar-legend">
+                  <span><i className="legend-pickup" /> Recoleccion</span>
+                  <span><i className="legend-progress" /> En curso</span>
+                  <span><i className="legend-delivery" /> Entrega</span>
+                </div>
+
+                <section className="calendar-day-detail">
+                  <div className="calendar-day-detail-header">
+                    <div>
+                      <span>Agenda del dia</span>
+                      <h3>{tituloDiaSeleccionado}</h3>
+                    </div>
+                    <strong>{enviosDiaSeleccionado.length} {enviosDiaSeleccionado.length === 1 ? "envio" : "envios"}</strong>
+                  </div>
+
+                  {cargandoCalendario ? (
+                    <div className="rating-empty-state">Cargando agenda...</div>
+                  ) : enviosDiaSeleccionado.length === 0 ? (
+                    <div className="rating-empty-state">No hay envios programados para este dia.</div>
+                  ) : (
+                    <div className="calendar-detail-list">
+                      {enviosDiaSeleccionado.map((envio) => (
+                        <article className="calendar-shipment-card" key={`${envio.id}-${envio.tipo_evento}`}>
+                          <div className="calendar-shipment-top">
+                            <div>
+                              <span className={`shipment-type event-${envio.tipo_evento}`}>{etiquetaEvento[envio.tipo_evento]}</span>
+                              <h4>{envio.nombre_servicio}</h4>
+                            </div>
+                            <span className={`shipment-status status-${envio.estado}`}>{envio.estado.replace("_", " ")}</span>
+                          </div>
+                          <div className="calendar-shipment-grid">
+                            <p><b>Cliente</b><span>{envio.cliente}</span></p>
+                            <p><b>Telefono</b><span>{envio.cliente_telefono}</span></p>
+                            <p><b>Origen</b><span>{envio.direccion_origen || "Sin especificar"}</span></p>
+                            <p><b>Destino</b><span>{envio.direccion_destino || "Sin especificar"}</span></p>
+                            <p><b>Paquete</b><span>{envio.descripcion_paquete || "Sin descripcion"}</span></p>
+                            <p><b>Peso</b><span>{envio.peso_paquete_kg === null ? "Sin especificar" : `${envio.peso_paquete_kg} kg`}</span></p>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
               </div>
             </div>
           </div>
@@ -832,23 +1287,81 @@ function DashboardOperador() {
           <div className="row">
             <div className="col-12">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Calificaciones de Clientes</h2>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-3 border rounded">
-                    <div className="d-flex w-100 justify-content-between">
-                      <h6 className="fw-bold">Cliente: Juan Pérez</h6>
-                      <small className="text-warning">Puntuación: 5 / 5</small>
-                    </div>
-                    <p className="mb-2 text-muted">El paquete llegó a tiempo y en perfectas condiciones.</p>
-                    <div className="p-2 border rounded bg-light">
-                      <label className="form-label mb-1 fw-bold" style={{ fontSize: "12px" }}>Responder a este comentario</label>
-                      <div className="d-flex gap-2">
-                        <input type="text" className="form-control form-control-sm" placeholder="Escribe tu respuesta" />
-                        <button className="btn btn-sm btn-primary">Responder</button>
-                      </div>
-                    </div>
+                <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+                  <div>
+                    <h2 className="dashboard-card-title mb-1">Calificaciones y reseñas</h2>
+                    <p className="text-muted mb-0">Conoce la experiencia de tus clientes y responde sus comentarios.</p>
                   </div>
+                  <button type="button" className="btn btn-outline-primary btn-sm" onClick={cargarCalificaciones} disabled={cargandoCalificaciones}>
+                    {cargandoCalificaciones ? "Actualizando..." : "Actualizar"}
+                  </button>
                 </div>
+
+                <div className="rating-summary-grid mb-4">
+                  <div className="rating-summary-card"><span>Promedio general</span><strong>{resumenCalificaciones.promedio.toFixed(1)} / 5</strong></div>
+                  <div className="rating-summary-card"><span>Reseñas recibidas</span><strong>{resumenCalificaciones.total}</strong></div>
+                  <div className="rating-summary-card"><span>Por responder</span><strong>{resumenCalificaciones.pendientes_respuesta}</strong></div>
+                </div>
+
+                {errorCalificaciones && <div className="alert alert-danger" role="alert">{errorCalificaciones}</div>}
+
+                {cargandoCalificaciones ? (
+                  <div className="rating-empty-state">Cargando calificaciones...</div>
+                ) : calificaciones.length === 0 ? (
+                  <div className="rating-empty-state">
+                    <h3>Aún no tienes calificaciones</h3>
+                    <p>Las reseñas aparecerán aquí cuando tus clientes califiquen un servicio finalizado.</p>
+                  </div>
+                ) : (
+                  <div className="d-flex flex-column gap-3">
+                    {calificaciones.map((calificacion) => (
+                      <article className="rating-review-card" key={calificacion.id}>
+                        <div className="d-flex flex-wrap justify-content-between gap-2">
+                          <div>
+                            <h3 className="rating-client-name">{calificacion.cliente}</h3>
+                            <p className="rating-service-name mb-0">{calificacion.nombre_servicio}</p>
+                          </div>
+                          <div className="text-md-end">
+                            <div className="rating-stars" aria-label={`${calificacion.puntuacion} de 5 estrellas`}>
+                              {"★".repeat(calificacion.puntuacion)}<span>{"★".repeat(5 - calificacion.puntuacion)}</span>
+                            </div>
+                            <small className="text-muted">{formatearFecha(calificacion.created_at)}</small>
+                          </div>
+                        </div>
+
+                        <p className="rating-comment">{calificacion.comentario || "El cliente no dejó un comentario."}</p>
+
+                        {calificacion.respuesta_id ? (
+                          <div className="rating-response">
+                            <strong>Tu respuesta</strong>
+                            <p>{calificacion.respuesta}</p>
+                            <small>{formatearFecha(calificacion.respuesta_created_at)}</small>
+                          </div>
+                        ) : (
+                          <div className="rating-response-form">
+                            <label htmlFor={`respuesta-${calificacion.id}`} className="form-label fw-bold">Responder al cliente</label>
+                            <textarea
+                              id={`respuesta-${calificacion.id}`}
+                              className="form-control"
+                              rows="3"
+                              maxLength="1000"
+                              placeholder="Agradece el comentario o aclara la situación de forma profesional."
+                              value={respuestas[calificacion.id] || ""}
+                              onChange={(evento) => setRespuestas((actuales) => ({ ...actuales, [calificacion.id]: evento.target.value }))}
+                              disabled={respondiendoId === calificacion.id}
+                            />
+                            <div className="d-flex justify-content-between align-items-center mt-2">
+                              <small className="text-muted">{(respuestas[calificacion.id] || "").length} / 1000</small>
+                              <button type="button" className="btn btn-primary btn-sm" onClick={() => responderCalificacion(calificacion.id)} disabled={respondiendoId === calificacion.id}>
+                                {respondiendoId === calificacion.id ? "Publicando..." : "Publicar respuesta"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -896,25 +1409,159 @@ function DashboardOperador() {
 
         {vista === "cupones" && (
           <div className="row">
-            <div className="col-md-6">
+            <div className="col-12">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Crear Cupón de Descuento</h2>
-                <div className="mb-3">
-                  <label className="form-label">Código del Cupón</label>
-                  <input type="text" className="form-control" placeholder="Ej. VERANO2026" />
+                <div className="coupon-page-header">
+                  <div>
+                    <h2 className="dashboard-card-title mb-1">Gestion de cupones</h2>
+                    <p className="text-muted mb-0">Premia a clientes que ya han reservado tus servicios con descuentos especiales.</p>
+                  </div>
+                  <button type="button" className="btn btn-outline-primary btn-sm" onClick={cargarGestionCupones} disabled={cargandoCupones}>
+                    {cargandoCupones ? "Actualizando..." : "Actualizar"}
+                  </button>
                 </div>
-                <div className="mb-3">
-                  <label className="form-label">Tipo de Descuento</label>
-                  <select className="form-select">
-                    <option>Porcentaje</option>
-                    <option>Monto Fijo</option>
-                  </select>
+
+                {errorCupon && <div className="alert alert-danger mt-3" role="alert">{errorCupon}</div>}
+                {mensajeCupon && <div className="alert alert-success mt-3" role="alert">{mensajeCupon}</div>}
+
+                <div className="coupon-layout">
+                  <form id="coupon-operator-form" className="coupon-form-panel" onSubmit={crearCuponOperador}>
+                    <div className="coupon-panel-title">
+                      <span>1</span>
+                      <div><h3>Configura el descuento</h3><p>Define el codigo, beneficio y periodo de validez.</p></div>
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold" htmlFor="codigo-cupon">Codigo del cupon</label>
+                      <input
+                        id="codigo-cupon"
+                        type="text"
+                        className="form-control text-uppercase"
+                        maxLength="30"
+                        placeholder="Ej. VERANO2026"
+                        value={formCupon.codigo}
+                        onChange={(evento) => setFormCupon({ ...formCupon, codigo: evento.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "") })}
+                        required
+                      />
+                      <small className="text-muted">Letras, numeros, guion y guion bajo.</small>
+                    </div>
+
+                    <div className="row g-3 mb-3">
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="tipo-descuento">Tipo de descuento</label>
+                        <select id="tipo-descuento" className="form-select" value={formCupon.tipo_descuento} onChange={(evento) => setFormCupon({ ...formCupon, tipo_descuento: evento.target.value })}>
+                          <option value="porcentaje">Porcentaje</option>
+                          <option value="monto_fijo">Monto fijo</option>
+                        </select>
+                      </div>
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="valor-descuento">Valor</label>
+                        <div className="input-group">
+                          <span className="input-group-text">{formCupon.tipo_descuento === "porcentaje" ? "%" : "Q"}</span>
+                          <input id="valor-descuento" type="number" className="form-control" min="0.01" max={formCupon.tipo_descuento === "porcentaje" ? "100" : undefined} step="0.01" value={formCupon.valor_descuento} onChange={(evento) => setFormCupon({ ...formCupon, valor_descuento: evento.target.value })} required />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold" htmlFor="descripcion-cupon">Descripcion</label>
+                      <textarea id="descripcion-cupon" className="form-control" rows="2" maxLength="300" placeholder="Ej. Descuento especial por temporada de fin de ano." value={formCupon.descripcion} onChange={(evento) => setFormCupon({ ...formCupon, descripcion: evento.target.value })} />
+                    </div>
+
+                    <div className="row g-3 mb-3">
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="inicio-cupon">Fecha de inicio</label>
+                        <input id="inicio-cupon" type="date" className="form-control" value={formCupon.fecha_inicio} onChange={(evento) => setFormCupon({ ...formCupon, fecha_inicio: evento.target.value })} required />
+                      </div>
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="fin-cupon">Fecha de finalizacion</label>
+                        <input id="fin-cupon" type="date" className="form-control" min={formCupon.fecha_inicio} value={formCupon.fecha_fin} onChange={(evento) => setFormCupon({ ...formCupon, fecha_fin: evento.target.value })} required />
+                      </div>
+                    </div>
+
+                    <div className="row g-3">
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="minimo-cupon">Compra minima</label>
+                        <div className="input-group"><span className="input-group-text">Q</span><input id="minimo-cupon" type="number" className="form-control" min="0" step="0.01" placeholder="Opcional" value={formCupon.monto_minimo} onChange={(evento) => setFormCupon({ ...formCupon, monto_minimo: evento.target.value })} /></div>
+                      </div>
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="usos-cupon">Limite total de usos</label>
+                        <input id="usos-cupon" type="number" className="form-control" min="1" step="1" placeholder="Sin limite" value={formCupon.usos_maximos} onChange={(evento) => setFormCupon({ ...formCupon, usos_maximos: evento.target.value })} />
+                      </div>
+                    </div>
+                  </form>
+
+                  <div className="coupon-clients-panel">
+                    <div className="coupon-panel-title">
+                      <span>2</span>
+                      <div><h3>Selecciona beneficiarios</h3><p>Clientes con reservaciones previas en tus servicios.</p></div>
+                    </div>
+
+                    <div className="coupon-client-actions">
+                      <strong>{clientesSeleccionados.length} seleccionados</strong>
+                      {clientesCupon.length > 0 && (
+                        <button type="button" onClick={() => setClientesSeleccionados(clientesSeleccionados.length === clientesCupon.length ? [] : clientesCupon.map((cliente) => cliente.id))}>
+                          {clientesSeleccionados.length === clientesCupon.length ? "Quitar todos" : "Seleccionar todos"}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="coupon-client-list">
+                      {cargandoCupones ? (
+                        <div className="coupon-empty">Cargando clientes...</div>
+                      ) : clientesCupon.length === 0 ? (
+                        <div className="coupon-empty">Todavia no hay clientes con reservaciones elegibles.</div>
+                      ) : clientesCupon.map((cliente) => (
+                        <label className={`coupon-client ${clientesSeleccionados.includes(cliente.id) ? "is-selected" : ""}`} key={cliente.id}>
+                          <input type="checkbox" checked={clientesSeleccionados.includes(cliente.id)} onChange={() => alternarClienteCupon(cliente.id)} />
+                          <span className="coupon-client-avatar">{cliente.nombre.charAt(0)}{cliente.apellido.charAt(0)}</span>
+                          <span className="coupon-client-info">
+                            <strong>{cliente.nombre} {cliente.apellido}</strong>
+                            <small>{cliente.email}</small>
+                            <small>{cliente.total_reservaciones} reservaciones</small>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <button type="submit" form="coupon-operator-form" className="btn btn-primary w-100 mt-3" disabled={guardandoCupon || clientesSeleccionados.length === 0}>
+                      {guardandoCupon ? "Creando y notificando..." : `Crear cupon para ${clientesSeleccionados.length} cliente${clientesSeleccionados.length === 1 ? "" : "s"}`}
+                    </button>
+                  </div>
                 </div>
-                <div className="mb-3">
-                  <label className="form-label">Valor del Descuento</label>
-                  <input type="number" className="form-control" />
+
+                <div className="coupon-history">
+                  <div className="coupon-history-header"><div><h3>Cupones creados</h3><p>Consulta vigencia, uso y beneficiarios de cada campaña.</p></div><strong>{cuponesOperador.length}</strong></div>
+                  {cargandoCupones ? (
+                    <div className="coupon-empty">Cargando cupones...</div>
+                  ) : cuponesOperador.length === 0 ? (
+                    <div className="coupon-empty">Aun no has creado cupones para tus clientes.</div>
+                  ) : (
+                    <div className="coupon-card-grid">
+                      {cuponesOperador.map((cupon) => (
+                        <article className="coupon-card" key={cupon.id}>
+                          <div className="coupon-card-top">
+                            <span className={`coupon-status coupon-status-${cupon.estado}`}>{cupon.estado}</span>
+                            <span className="coupon-discount">{cupon.tipo_descuento === "porcentaje" ? `${cupon.valor_descuento}%` : `Q${cupon.valor_descuento.toFixed(2)}`}</span>
+                          </div>
+                          <code>{cupon.codigo}</code>
+                          <p>{cupon.descripcion || "Sin descripcion adicional."}</p>
+                          <div className="coupon-card-stats">
+                            <span><b>{cupon.total_beneficiarios}</b> beneficiarios</span>
+                            <span><b>{cupon.usos_actuales}</b> usos</span>
+                          </div>
+                          <small>Vigente del {cupon.fecha_inicio} al {cupon.fecha_fin}</small>
+                          {cupon.monto_minimo !== null && <small>Compra minima: Q{cupon.monto_minimo.toFixed(2)}</small>}
+                          <details className="coupon-beneficiaries">
+                            <summary>Ver beneficiarios</summary>
+                            {cupon.beneficiarios.map((beneficiario) => <span key={beneficiario.id}>{beneficiario.nombre} {beneficiario.canjeado ? "(canjeado)" : ""}</span>)}
+                          </details>
+                          {cupon.estado === "activo" && <button type="button" className="btn btn-outline-danger btn-sm mt-3" onClick={() => desactivarCuponOperador(cupon)}>Desactivar cupon</button>}
+                        </article>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <button className="btn btn-primary w-100">Generar y Enviar Cupón</button>
               </div>
             </div>
           </div>
