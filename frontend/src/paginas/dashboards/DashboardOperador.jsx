@@ -19,6 +19,58 @@ const formatearFecha = (fecha) => new Intl.DateTimeFormat("es-GT", {
   year: "numeric"
 }).format(new Date(fecha));
 
+const claveFechaLocal = (fecha) => [
+  fecha.getFullYear(),
+  String(fecha.getMonth() + 1).padStart(2, "0"),
+  String(fecha.getDate()).padStart(2, "0")
+].join("-");
+
+const fechaDesdeClave = (clave) => {
+  const [anio, mes, dia] = clave.split("-").map(Number);
+  return new Date(anio, mes - 1, dia);
+};
+
+const obtenerCeldasMes = (mesActual) => {
+  const anio = mesActual.getFullYear();
+  const mes = mesActual.getMonth();
+  const primerDia = new Date(anio, mes, 1);
+  const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+  const espaciosIniciales = (primerDia.getDay() + 6) % 7;
+  const totalCeldas = Math.ceil((espaciosIniciales + ultimoDia) / 7) * 7;
+
+  return Array.from({ length: totalCeldas }, (_, indice) => {
+    const numeroDia = indice - espaciosIniciales + 1;
+    return numeroDia > 0 && numeroDia <= ultimoDia
+      ? new Date(anio, mes, numeroDia)
+      : null;
+  });
+};
+
+const agruparEnviosPorDia = (reservaciones, mesActual) => {
+  const eventos = {};
+  const inicioMes = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1);
+  const finMes = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0);
+
+  reservaciones.forEach((reservacion) => {
+    const inicioReserva = fechaDesdeClave(reservacion.fecha_inicio);
+    const finReserva = fechaDesdeClave(reservacion.fecha_fin);
+    const inicio = inicioReserva < inicioMes ? inicioMes : inicioReserva;
+    const fin = finReserva > finMes ? finMes : finReserva;
+
+    for (let fecha = new Date(inicio); fecha <= fin; fecha.setDate(fecha.getDate() + 1)) {
+      const clave = claveFechaLocal(fecha);
+      let tipo = "en_curso";
+      if (clave === reservacion.fecha_inicio && clave === reservacion.fecha_fin) tipo = "recoleccion_entrega";
+      else if (clave === reservacion.fecha_inicio) tipo = "recoleccion";
+      else if (clave === reservacion.fecha_fin) tipo = "entrega";
+
+      eventos[clave] = [...(eventos[clave] || []), { ...reservacion, tipo_evento: tipo }];
+    }
+  });
+
+  return eventos;
+};
+
 function DashboardOperador() {
   const navigate = useNavigate();
   const [vista, setVista] = useState("inicio");
@@ -36,6 +88,16 @@ function DashboardOperador() {
   const [cargandoCalificaciones, setCargandoCalificaciones] = useState(false);
   const [errorCalificaciones, setErrorCalificaciones] = useState("");
   const [respondiendoId, setRespondiendoId] = useState(null);
+  const [mesCalendario, setMesCalendario] = useState(() => {
+    const hoy = new Date();
+    return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  });
+  const [reservacionesCalendario, setReservacionesCalendario] = useState([]);
+  const [serviciosCalendario, setServiciosCalendario] = useState([]);
+  const [servicioCalendario, setServicioCalendario] = useState("");
+  const [diaSeleccionado, setDiaSeleccionado] = useState(null);
+  const [cargandoCalendario, setCargandoCalendario] = useState(false);
+  const [errorCalendario, setErrorCalendario] = useState("");
 
   const [editandoId, setEditandoId] = useState(null);
   const [nombreServicio, setNombreServicio] = useState("");
@@ -173,6 +235,53 @@ function DashboardOperador() {
     }
   };
 
+  const cargarCalendario = async () => {
+    const inicioMes = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), 1);
+    const finMes = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() + 1, 0);
+    const parametros = new URLSearchParams({
+      desde: claveFechaLocal(inicioMes),
+      hasta: claveFechaLocal(finMes)
+    });
+
+    if (servicioCalendario) parametros.set("servicio_id", servicioCalendario);
+
+    setCargandoCalendario(true);
+    setErrorCalendario("");
+
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/calendario?${parametros}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        setErrorCalendario(data.message || "No se pudo cargar el calendario.");
+        return;
+      }
+
+      const reservaciones = data.data.reservaciones || [];
+      const eventos = agruparEnviosPorDia(reservaciones, mesCalendario);
+      const hoy = claveFechaLocal(new Date());
+      const prefijoMes = claveFechaLocal(inicioMes).slice(0, 7);
+
+      setReservacionesCalendario(reservaciones);
+      setServiciosCalendario(data.data.servicios || []);
+      setDiaSeleccionado((actual) => {
+        if (actual?.startsWith(prefijoMes)) return actual;
+        if (hoy.startsWith(prefijoMes)) return hoy;
+        return Object.keys(eventos).sort()[0] || claveFechaLocal(inicioMes);
+      });
+    } catch {
+      setErrorCalendario("No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoCalendario(false);
+    }
+  };
+
+  const cambiarMesCalendario = (cantidad) => {
+    setMesCalendario((actual) => new Date(actual.getFullYear(), actual.getMonth() + cantidad, 1));
+  };
+
   const solicitarCambioPerfil = async () => {
     if (!formPerfil.nombre || !formPerfil.apellido || !formPerfil.telefono || !formPerfil.zona_operacion || !formPerfil.genero) {
       setMensajePerfil("Todos los campos obligatorios son requeridos.");
@@ -282,13 +391,15 @@ function DashboardOperador() {
   useEffect(() => {
     if (vista === "servicios") {
       cargarServicios();
+    } else if (vista === "calendario") {
+      cargarCalendario();
     } else if (vista === "calificaciones") {
       cargarCalificaciones();
     } else if (vista === "perfil") {
       cargarPerfil();
       cargarSolicitudesCambio();
     }
-  }, [vista]);
+  }, [vista, mesCalendario, servicioCalendario]);
 
   const manejarRegistroServicio = async (e) => {
     e.preventDefault();
@@ -527,6 +638,28 @@ function DashboardOperador() {
     localStorage.removeItem("token");
     localStorage.removeItem("rol");
     navigate("/");
+  };
+
+  const celdasCalendario = obtenerCeldasMes(mesCalendario);
+  const eventosCalendario = agruparEnviosPorDia(reservacionesCalendario, mesCalendario);
+  const enviosDiaSeleccionado = diaSeleccionado ? eventosCalendario[diaSeleccionado] || [] : [];
+  const nombreMesCalendario = new Intl.DateTimeFormat("es-GT", {
+    month: "long",
+    year: "numeric"
+  }).format(mesCalendario);
+  const tituloDiaSeleccionado = diaSeleccionado
+    ? new Intl.DateTimeFormat("es-GT", {
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    }).format(fechaDesdeClave(diaSeleccionado))
+    : "Selecciona un dia";
+
+  const etiquetaEvento = {
+    recoleccion: "Recoleccion",
+    entrega: "Entrega",
+    en_curso: "En curso",
+    recoleccion_entrega: "Recoleccion y entrega"
   };
 
   return (
@@ -902,17 +1035,124 @@ function DashboardOperador() {
           <div className="row">
             <div className="col-12">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Calendario de Envíos Programados</h2>
-                <p className="text-muted">Fechas reservadas por los clientes para recolección y entrega.</p>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-2 border rounded bg-light">
-                    <div className="d-flex w-100 justify-content-between">
-                      <h6 className="fw-bold">Fecha: 19/06/2026</h6>
-                      <small className="text-primary fw-bold">Q45.00</small>
-                    </div>
-                    <p className="mb-0 text-muted">Cliente: Juan Pérez. Dirección de recolección: Zona 10. Paquete: Documentos.</p>
+                <div className="calendar-header">
+                  <div>
+                    <h2 className="dashboard-card-title mb-1">Calendario de envios programados</h2>
+                    <p className="text-muted mb-0">Consulta las recolecciones, envios en curso y entregas de todos tus servicios.</p>
+                  </div>
+                  <div className="calendar-filter">
+                    <label htmlFor="servicio-calendario">Vista por servicio</label>
+                    <select
+                      id="servicio-calendario"
+                      className="form-select form-select-sm"
+                      value={servicioCalendario}
+                      onChange={(evento) => setServicioCalendario(evento.target.value)}
+                    >
+                      <option value="">Todos mis servicios</option>
+                      {serviciosCalendario.map((servicio) => (
+                        <option value={servicio.id} key={servicio.id}>{servicio.nombre_servicio}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
+
+                {errorCalendario && <div className="alert alert-danger mt-3" role="alert">{errorCalendario}</div>}
+
+                <div className="calendar-toolbar">
+                  <button type="button" className="calendar-nav-button" onClick={() => cambiarMesCalendario(-1)} aria-label="Mes anterior">‹</button>
+                  <h3>{nombreMesCalendario}</h3>
+                  <button type="button" className="calendar-nav-button" onClick={() => cambiarMesCalendario(1)} aria-label="Mes siguiente">›</button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm calendar-today-button"
+                    onClick={() => {
+                      const hoy = new Date();
+                      setMesCalendario(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+                      setDiaSeleccionado(claveFechaLocal(hoy));
+                    }}
+                  >
+                    Hoy
+                  </button>
+                </div>
+
+                <div className={`calendar-month ${cargandoCalendario ? "calendar-loading" : ""}`}>
+                  {["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"].map((dia) => (
+                    <div className="calendar-weekday" key={dia}>{dia}</div>
+                  ))}
+
+                  {celdasCalendario.map((fecha, indice) => {
+                    if (!fecha) return <div className="calendar-day calendar-day-empty" key={`vacio-${indice}`} />;
+
+                    const clave = claveFechaLocal(fecha);
+                    const eventos = eventosCalendario[clave] || [];
+                    const esHoy = clave === claveFechaLocal(new Date());
+                    const estaSeleccionado = clave === diaSeleccionado;
+
+                    return (
+                      <button
+                        type="button"
+                        className={`calendar-day ${esHoy ? "is-today" : ""} ${estaSeleccionado ? "is-selected" : ""}`}
+                        key={clave}
+                        onClick={() => setDiaSeleccionado(clave)}
+                      >
+                        <span className="calendar-day-number">{fecha.getDate()}</span>
+                        <span className="calendar-events">
+                          {eventos.slice(0, 3).map((evento) => (
+                            <span className={`calendar-event event-${evento.tipo_evento}`} key={`${evento.id}-${evento.tipo_evento}`}>
+                              <b>{etiquetaEvento[evento.tipo_evento]}</b>
+                              <span>{evento.nombre_servicio}</span>
+                            </span>
+                          ))}
+                          {eventos.length > 3 && <span className="calendar-more">+{eventos.length - 3} mas</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="calendar-legend">
+                  <span><i className="legend-pickup" /> Recoleccion</span>
+                  <span><i className="legend-progress" /> En curso</span>
+                  <span><i className="legend-delivery" /> Entrega</span>
+                </div>
+
+                <section className="calendar-day-detail">
+                  <div className="calendar-day-detail-header">
+                    <div>
+                      <span>Agenda del dia</span>
+                      <h3>{tituloDiaSeleccionado}</h3>
+                    </div>
+                    <strong>{enviosDiaSeleccionado.length} {enviosDiaSeleccionado.length === 1 ? "envio" : "envios"}</strong>
+                  </div>
+
+                  {cargandoCalendario ? (
+                    <div className="rating-empty-state">Cargando agenda...</div>
+                  ) : enviosDiaSeleccionado.length === 0 ? (
+                    <div className="rating-empty-state">No hay envios programados para este dia.</div>
+                  ) : (
+                    <div className="calendar-detail-list">
+                      {enviosDiaSeleccionado.map((envio) => (
+                        <article className="calendar-shipment-card" key={`${envio.id}-${envio.tipo_evento}`}>
+                          <div className="calendar-shipment-top">
+                            <div>
+                              <span className={`shipment-type event-${envio.tipo_evento}`}>{etiquetaEvento[envio.tipo_evento]}</span>
+                              <h4>{envio.nombre_servicio}</h4>
+                            </div>
+                            <span className={`shipment-status status-${envio.estado}`}>{envio.estado.replace("_", " ")}</span>
+                          </div>
+                          <div className="calendar-shipment-grid">
+                            <p><b>Cliente</b><span>{envio.cliente}</span></p>
+                            <p><b>Telefono</b><span>{envio.cliente_telefono}</span></p>
+                            <p><b>Origen</b><span>{envio.direccion_origen || "Sin especificar"}</span></p>
+                            <p><b>Destino</b><span>{envio.direccion_destino || "Sin especificar"}</span></p>
+                            <p><b>Paquete</b><span>{envio.descripcion_paquete || "Sin descripcion"}</span></p>
+                            <p><b>Peso</b><span>{envio.peso_paquete_kg === null ? "Sin especificar" : `${envio.peso_paquete_kg} kg`}</span></p>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
               </div>
             </div>
           </div>

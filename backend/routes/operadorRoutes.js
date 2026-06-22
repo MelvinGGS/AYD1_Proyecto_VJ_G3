@@ -3,6 +3,7 @@ const router = express.Router();
 const operadorServicioController = require("../controllers/operadorServicioController");
 const operadorController = require("../controllers/operadorController");
 const operadorCalificacionController = require("../controllers/operadorCalificacionController");
+const operadorCalendarioController = require("../controllers/operadorCalendarioController");
 const authMiddleware = require("../middlewares/auth");
 const upload = require("../middlewares/upload");
 
@@ -38,5 +39,8 @@ router.get("/perfil/solicitudes", operadorController.verSolicitudesCambio);
 // Rutas de calificaciones y respuestas
 router.get("/calificaciones", operadorCalificacionController.listarCalificaciones);
 router.post("/calificaciones/:id/respuesta", operadorCalificacionController.responderCalificacion);
+
+// Calendario mensual de envios programados
+router.get("/calendario", operadorCalendarioController.obtenerCalendario);
 
 module.exports = router;
