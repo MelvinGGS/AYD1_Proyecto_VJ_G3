@@ -62,6 +62,10 @@ function DashboardOperador() {
   const [cargandoClientes, setCargandoClientes] = useState(false);
   const [errorClientes, setErrorClientes] = useState("");
 
+  const [reporteCalificaciones, setReporteCalificaciones] = useState([]);
+  const [cargandoCalificaciones, setCargandoCalificaciones] = useState(false);
+  const [errorCalificaciones, setErrorCalificaciones] = useState("");
+
   const token = localStorage.getItem("token");
 
   const cargarPerfil = async () => {
@@ -153,6 +157,28 @@ function DashboardOperador() {
       setErrorClientes("Error de conexión al servidor.");
     } finally {
       setCargandoClientes(false);
+    }
+  };
+
+  const cargarReporteCalificaciones = async () => {
+    setCargandoCalificaciones(true);
+    setErrorCalificaciones("");
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/reportes/calificaciones", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await respuesta.json();
+      if (respuesta.ok && data.success) {
+        setReporteCalificaciones(data.data || []);
+      } else {
+        setErrorCalificaciones(data.message || "Error al cargar reporte de calificaciones.");
+      }
+    } catch (error) {
+      setErrorCalificaciones("Error de conexión al servidor.");
+    } finally {
+      setCargandoCalificaciones(false);
     }
   };
 
@@ -275,7 +301,7 @@ function DashboardOperador() {
     try {
       const { data, totales } = reporteGananciasOperador;
       const title = `Reporte de Ganancias - ${perfil?.email || ""}`;
-      const { doc, agregarTexto, dibujarTabla } = crearDocumentoPdf(title);
+      const { doc, agregarTexto, dibujarTabla, setY } = crearDocumentoPdf(title);
 
       agregarTexto(`Generado: ${new Date().toLocaleString()}`, { fontSize: 10, lineHeight: 16 });
       agregarTexto(" ");
@@ -555,6 +581,8 @@ function DashboardOperador() {
         cargarReporteGananciasOperador();
       } else if (pestañaReporte === "clientes") {
         cargarHistorialClientes();
+      } else if (pestañaReporte === "calificaciones") {
+        cargarReporteCalificaciones(); // SE CARGA EL NUEVO REPORTE AQUÍ
       }
     }
   }, [vista, pestañaReporte]);
@@ -798,12 +826,18 @@ function DashboardOperador() {
     navigate("/");
   };
 
-  // CÁLCULOS DINÁMICOS PARA LA PESTAÑA INICIO
   const serviciosActivos = servicios.filter(s => s.estado === "activo").length;
   const serviciosConCalif = servicios.filter(s => parseFloat(s.calificacion_promedio) > 0);
   const calificacionGeneral = serviciosConCalif.length > 0
     ? (serviciosConCalif.reduce((acc, s) => acc + parseFloat(s.calificacion_promedio), 0) / serviciosConCalif.length).toFixed(1)
     : "0.0";
+
+  // CÁLCULOS DINÁMICOS PARA LA PESTAÑA DE CALIFICACIONES
+  const totalReseñas = reporteCalificaciones.length;
+  const promedioReseñas = totalReseñas > 0
+    ? (reporteCalificaciones.reduce((acc, c) => acc + c.puntuacion, 0) / totalReseñas).toFixed(1)
+    : "0.0";
+  const reseñas5Estrellas = reporteCalificaciones.filter(c => c.puntuacion === 5).length;
 
   return (
     <div style={{ backgroundColor: "#F1F5F9", minHeight: "100vh" }}>
@@ -1226,7 +1260,7 @@ function DashboardOperador() {
           <div className="row">
             <div className="col-12 mb-4">
               
-              {/* NAVEGACIÓN POR PESTAÑAS */}
+              {/* === NAVEGACIÓN POR PESTAÑAS === */}
               <ul className="nav nav-pills mb-4 p-2 bg-white border shadow-sm rounded gap-2">
                 <li className="nav-item">
                   <button 
@@ -1434,14 +1468,83 @@ function DashboardOperador() {
               {/* PESTAÑA 3: REPORTE DE CALIFICACIONES */}
               {pestañaReporte === "calificaciones" && (
                 <div className="dashboard-card-custom">
-                  <h2 className="dashboard-card-title">Reporte de Calificaciones</h2>
-                  <p className="text-muted">Aquí se implementará el resumen general de reseñas recibidas.</p>
+                  <h2 className="dashboard-card-title">Reporte de Calificaciones y Comentarios</h2>
+                  <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <p className="text-muted mb-0">Resumen de la retroalimentación recibida por parte de tus clientes.</p>
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={cargarReporteCalificaciones}
+                      disabled={cargandoCalificaciones}
+                    >
+                      {cargandoCalificaciones ? "Actualizando..." : "Actualizar"}
+                    </button>
+                  </div>
+                  
+                  {errorCalificaciones && (
+                    <div className="alert alert-danger py-2">{errorCalificaciones}</div>
+                  )}
+                  
+                  {cargandoCalificaciones ? (
+                    <p className="text-muted">Cargando reseñas...</p>
+                  ) : reporteCalificaciones.length === 0 ? (
+                    <p className="text-muted">No has recibido calificaciones todavía.</p>
+                  ) : (
+                    <>
+                      {/* TARJETAS RESUMEN DE CALIFICACIONES */}
+                      <div className="row mb-4 text-center">
+                        <div className="col-md-4 mb-2">
+                          <div className="p-3 rounded bg-light border">
+                            <div className="text-muted" style={{ fontSize: "12px" }}>Total de Reseñas</div>
+                            <div className="fs-5 fw-bold">{totalReseñas}</div>
+                          </div>
+                        </div>
+                        <div className="col-md-4 mb-2">
+                          <div className="p-3 rounded bg-light border">
+                            <div className="text-muted" style={{ fontSize: "12px" }}>Promedio General</div>
+                            <div className="fs-5 fw-bold text-warning">{promedioReseñas} / 5.0</div>
+                          </div>
+                        </div>
+                        <div className="col-md-4 mb-2">
+                          <div className="p-3 rounded bg-light border">
+                            <div className="text-muted" style={{ fontSize: "12px" }}>Reseñas de 5 Estrellas</div>
+                            <div className="fs-5 fw-bold text-success">{reseñas5Estrellas}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* LISTADO DE COMENTARIOS */}
+                      <div className="row">
+                        {reporteCalificaciones.map((calif) => (
+                          <div className="col-12 mb-3" key={calif.calificacion_id}>
+                            <div className="p-3 border rounded bg-white shadow-sm">
+                              <div className="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                  <h6 className="fw-bold mb-0 text-dark">
+                                    {calif.cliente_nombre} {calif.cliente_apellido}
+                                  </h6>
+                                  <small className="text-muted" style={{ fontSize: "12px" }}>
+                                    Servicio: {calif.nombre_servicio} | {new Date(calif.fecha).toLocaleDateString()}
+                                  </small>
+                                </div>
+                                <div className="text-warning fs-6" title={`${calif.puntuacion} de 5 estrellas`}>
+                                  {"⭐".repeat(calif.puntuacion)}{"☆".repeat(5 - calif.puntuacion)}
+                                </div>
+                              </div>
+                              <p className="mb-0" style={{ fontSize: "14px", color: "#334155" }}>
+                                "{calif.comentario || "El cliente no dejó ningún comentario escrito."}"
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
             </div>
 
-            {/* TARJETAS INFERIORES DE REPORTES*/}
+            {/* TARJETAS INFERIORES ESTÁTICAS DE REPORTES */}
             <div className="col-md-6">
               <div className="dashboard-card-custom">
                 <h2 className="dashboard-card-title">Reportar Cliente</h2>

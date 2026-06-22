@@ -41,6 +41,7 @@ router.get("/perfil/solicitudes", operadorController.verSolicitudesCambio);
 router.get("/reportes/ganancias", operadorController.reporteGanancias);
 router.get("/reportes/servicio/:servicioId", operadorController.reporteGananciaPorServicio);
 router.get("/reportes/historial-clientes", operadorController.reporteHistorialClientes);
+router.get("/reportes/calificaciones", operadorController.reporteCalificaciones);
 
 // Rutas de calificaciones y respuestas
 router.get("/calificaciones", operadorCalificacionController.listarCalificaciones);

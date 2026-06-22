@@ -228,11 +228,52 @@ const reporteHistorialClientes = async (req, res) => {
   }
 };
 
+
+const reporteCalificaciones = async (req, res) => {
+  const operadorId = req.usuario.id;
+  try {
+    const { rows } = await db.pool.query(
+      `SELECT 
+          c.id AS calificacion_id,
+          c.puntuacion,
+          c.comentario,
+          c.created_at AS fecha,
+          s.nombre_servicio,
+          cli.nombre AS cliente_nombre,
+          cli.apellido AS cliente_apellido
+       FROM calificaciones c
+       JOIN servicios_envio s ON c.servicio_envio_id = s.id
+       JOIN clientes cli ON c.cliente_id = cli.id
+       WHERE s.operador_id = $1 AND c.tipo_servicio = 'envio'
+       ORDER BY c.created_at DESC`,
+      [operadorId]
+    );
+
+    const decoded = rows.map(r => ({
+      ...r,
+      comentario: decodeEscapedUnicode(r.comentario || ""),
+      nombre_servicio: decodeEscapedUnicode(r.nombre_servicio || ""),
+      cliente_nombre: decodeEscapedUnicode(r.cliente_nombre || ""),
+      cliente_apellido: decodeEscapedUnicode(r.cliente_apellido || "")
+    }));
+
+    res.json({ success: true, data: decoded });
+  } catch (error) {
+    console.error("Error en reporte de calificaciones:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error al obtener reporte de calificaciones.", 
+      error: { details: error.message } 
+    });
+  }
+};
+
 module.exports = {
   obtenerPerfil,
   solicitarCambioPerfil,
   verSolicitudesCambio,
   reporteGanancias,
   reporteGananciaPorServicio,
-  reporteHistorialClientes
+  reporteHistorialClientes,
+  reporteCalificaciones
 };
