@@ -36,8 +36,11 @@ router.patch("/servicios/:id/estado", operadorServicioController.cambiarEstadoSe
 router.get("/perfil", operadorController.obtenerPerfil);
 router.post("/perfil/solicitar-cambio", operadorController.solicitarCambioPerfil);
 router.get("/perfil/solicitudes", operadorController.verSolicitudesCambio);
+
+// Reportes
 router.get("/reportes/ganancias", operadorController.reporteGanancias);
 router.get("/reportes/servicio/:servicioId", operadorController.reporteGananciaPorServicio);
+router.get("/reportes/historial-clientes", operadorController.reporteHistorialClientes);
 
 // Rutas de calificaciones y respuestas
 router.get("/calificaciones", operadorCalificacionController.listarCalificaciones);

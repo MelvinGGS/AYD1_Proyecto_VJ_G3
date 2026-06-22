@@ -186,10 +186,53 @@ const reporteGananciaPorServicio = async (req, res) => {
   }
 };
 
+const reporteHistorialClientes = async (req, res) => {
+  const operadorId = req.usuario.id;
+  try {
+    const { rows } = await db.pool.query(
+      `SELECT 
+          c.id,
+          c.nombre,
+          c.apellido,
+          c.telefono,
+          u.email,
+          COUNT(r.id) AS total_reservaciones,
+          MAX(r.fecha_inicio) AS ultima_reservacion,
+          SUM(r.precio_total) AS total_gastado
+       FROM clientes c
+       JOIN usuarios u ON c.id = u.id
+       JOIN reservaciones r ON r.cliente_id = c.id
+       JOIN servicios_envio s ON r.servicio_envio_id = s.id
+       WHERE s.operador_id = $1
+         AND r.estado NOT IN ('cancelado', 'reembolsado')
+       GROUP BY c.id, c.nombre, c.apellido, c.telefono, u.email
+       ORDER BY total_reservaciones DESC, ultima_reservacion DESC`,
+      [operadorId]
+    );
+
+    // Decodificar caracteres especiales usando la misma función de tu equipo
+    const decoded = rows.map(r => ({
+      ...r,
+      nombre: decodeEscapedUnicode(r.nombre),
+      apellido: decodeEscapedUnicode(r.apellido)
+    }));
+
+    res.json({ success: true, data: decoded });
+  } catch (error) {
+    console.error("Error en reporte historial de clientes:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error al obtener historial de clientes.", 
+      error: { details: error.message } 
+    });
+  }
+};
+
 module.exports = {
   obtenerPerfil,
   solicitarCambioPerfil,
   verSolicitudesCambio,
   reporteGanancias,
-  reporteGananciaPorServicio
+  reporteGananciaPorServicio,
+  reporteHistorialClientes
 };
