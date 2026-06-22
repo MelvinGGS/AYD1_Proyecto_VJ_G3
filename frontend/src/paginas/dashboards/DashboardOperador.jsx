@@ -71,6 +71,21 @@ const agruparEnviosPorDia = (reservaciones, mesActual) => {
   return eventos;
 };
 
+const formularioCuponInicial = () => {
+  const hoy = new Date();
+  const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, hoy.getDate());
+  return {
+    codigo: "",
+    descripcion: "",
+    tipo_descuento: "porcentaje",
+    valor_descuento: "",
+    monto_minimo: "",
+    usos_maximos: "",
+    fecha_inicio: claveFechaLocal(hoy),
+    fecha_fin: claveFechaLocal(fin)
+  };
+};
+
 function DashboardOperador() {
   const navigate = useNavigate();
   const [vista, setVista] = useState("inicio");
@@ -98,6 +113,14 @@ function DashboardOperador() {
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
   const [cargandoCalendario, setCargandoCalendario] = useState(false);
   const [errorCalendario, setErrorCalendario] = useState("");
+  const [cuponesOperador, setCuponesOperador] = useState([]);
+  const [clientesCupon, setClientesCupon] = useState([]);
+  const [clientesSeleccionados, setClientesSeleccionados] = useState([]);
+  const [formCupon, setFormCupon] = useState(formularioCuponInicial);
+  const [cargandoCupones, setCargandoCupones] = useState(false);
+  const [guardandoCupon, setGuardandoCupon] = useState(false);
+  const [errorCupon, setErrorCupon] = useState("");
+  const [mensajeCupon, setMensajeCupon] = useState("");
 
   const [editandoId, setEditandoId] = useState(null);
   const [nombreServicio, setNombreServicio] = useState("");
@@ -282,6 +305,106 @@ function DashboardOperador() {
     setMesCalendario((actual) => new Date(actual.getFullYear(), actual.getMonth() + cantidad, 1));
   };
 
+  const cargarGestionCupones = async () => {
+    setCargandoCupones(true);
+    setErrorCupon("");
+
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [respuestaCupones, respuestaClientes] = await Promise.all([
+        fetch("http://localhost:3000/api/operador/cupones", { headers }),
+        fetch("http://localhost:3000/api/operador/cupones/clientes", { headers })
+      ]);
+      const [dataCupones, dataClientes] = await Promise.all([
+        respuestaCupones.json(),
+        respuestaClientes.json()
+      ]);
+
+      if (!respuestaCupones.ok || !respuestaClientes.ok) {
+        setErrorCupon(dataCupones.message || dataClientes.message || "No se pudo cargar la gestion de cupones.");
+        return;
+      }
+
+      setCuponesOperador(dataCupones.data || []);
+      setClientesCupon(dataClientes.data || []);
+    } catch {
+      setErrorCupon("No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoCupones(false);
+    }
+  };
+
+  const alternarClienteCupon = (clienteId) => {
+    setClientesSeleccionados((actuales) => actuales.includes(clienteId)
+      ? actuales.filter((id) => id !== clienteId)
+      : [...actuales, clienteId]);
+  };
+
+  const crearCuponOperador = async (evento) => {
+    evento.preventDefault();
+    setErrorCupon("");
+    setMensajeCupon("");
+
+    if (clientesSeleccionados.length === 0) {
+      setErrorCupon("Selecciona al menos un cliente beneficiario.");
+      return;
+    }
+
+    setGuardandoCupon(true);
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/cupones", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ ...formCupon, cliente_ids: clientesSeleccionados })
+      });
+      const data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        setErrorCupon(data.message || "No se pudo crear el cupon.");
+        return;
+      }
+
+      setMensajeCupon(`${data.message} Correos enviados: ${data.data.correos_enviados}/${data.data.total_beneficiarios}.`);
+      setFormCupon(formularioCuponInicial());
+      setClientesSeleccionados([]);
+      await cargarGestionCupones();
+    } catch {
+      setErrorCupon("No se pudo conectar con el servidor.");
+    } finally {
+      setGuardandoCupon(false);
+    }
+  };
+
+  const desactivarCuponOperador = async (cupon) => {
+    const confirmacion = await Swal.fire({
+      title: "Desactivar cupon",
+      text: `El codigo ${cupon.codigo} dejara de estar disponible para sus beneficiarios.`,
+      showCancelButton: true,
+      confirmButtonText: "Desactivar",
+      cancelButtonText: "Cancelar"
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/cupones/${cupon.id}/desactivar`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await respuesta.json();
+      if (!respuesta.ok) {
+        setErrorCupon(data.message || "No se pudo desactivar el cupon.");
+        return;
+      }
+      setMensajeCupon(data.message);
+      await cargarGestionCupones();
+    } catch {
+      setErrorCupon("No se pudo conectar con el servidor.");
+    }
+  };
+
   const solicitarCambioPerfil = async () => {
     if (!formPerfil.nombre || !formPerfil.apellido || !formPerfil.telefono || !formPerfil.zona_operacion || !formPerfil.genero) {
       setMensajePerfil("Todos los campos obligatorios son requeridos.");
@@ -395,6 +518,8 @@ function DashboardOperador() {
       cargarCalendario();
     } else if (vista === "calificaciones") {
       cargarCalificaciones();
+    } else if (vista === "cupones") {
+      cargarGestionCupones();
     } else if (vista === "perfil") {
       cargarPerfil();
       cargarSolicitudesCambio();
@@ -1284,25 +1409,159 @@ function DashboardOperador() {
 
         {vista === "cupones" && (
           <div className="row">
-            <div className="col-md-6">
+            <div className="col-12">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Crear Cupón de Descuento</h2>
-                <div className="mb-3">
-                  <label className="form-label">Código del Cupón</label>
-                  <input type="text" className="form-control" placeholder="Ej. VERANO2026" />
+                <div className="coupon-page-header">
+                  <div>
+                    <h2 className="dashboard-card-title mb-1">Gestion de cupones</h2>
+                    <p className="text-muted mb-0">Premia a clientes que ya han reservado tus servicios con descuentos especiales.</p>
+                  </div>
+                  <button type="button" className="btn btn-outline-primary btn-sm" onClick={cargarGestionCupones} disabled={cargandoCupones}>
+                    {cargandoCupones ? "Actualizando..." : "Actualizar"}
+                  </button>
                 </div>
-                <div className="mb-3">
-                  <label className="form-label">Tipo de Descuento</label>
-                  <select className="form-select">
-                    <option>Porcentaje</option>
-                    <option>Monto Fijo</option>
-                  </select>
+
+                {errorCupon && <div className="alert alert-danger mt-3" role="alert">{errorCupon}</div>}
+                {mensajeCupon && <div className="alert alert-success mt-3" role="alert">{mensajeCupon}</div>}
+
+                <div className="coupon-layout">
+                  <form id="coupon-operator-form" className="coupon-form-panel" onSubmit={crearCuponOperador}>
+                    <div className="coupon-panel-title">
+                      <span>1</span>
+                      <div><h3>Configura el descuento</h3><p>Define el codigo, beneficio y periodo de validez.</p></div>
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold" htmlFor="codigo-cupon">Codigo del cupon</label>
+                      <input
+                        id="codigo-cupon"
+                        type="text"
+                        className="form-control text-uppercase"
+                        maxLength="30"
+                        placeholder="Ej. VERANO2026"
+                        value={formCupon.codigo}
+                        onChange={(evento) => setFormCupon({ ...formCupon, codigo: evento.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "") })}
+                        required
+                      />
+                      <small className="text-muted">Letras, numeros, guion y guion bajo.</small>
+                    </div>
+
+                    <div className="row g-3 mb-3">
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="tipo-descuento">Tipo de descuento</label>
+                        <select id="tipo-descuento" className="form-select" value={formCupon.tipo_descuento} onChange={(evento) => setFormCupon({ ...formCupon, tipo_descuento: evento.target.value })}>
+                          <option value="porcentaje">Porcentaje</option>
+                          <option value="monto_fijo">Monto fijo</option>
+                        </select>
+                      </div>
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="valor-descuento">Valor</label>
+                        <div className="input-group">
+                          <span className="input-group-text">{formCupon.tipo_descuento === "porcentaje" ? "%" : "Q"}</span>
+                          <input id="valor-descuento" type="number" className="form-control" min="0.01" max={formCupon.tipo_descuento === "porcentaje" ? "100" : undefined} step="0.01" value={formCupon.valor_descuento} onChange={(evento) => setFormCupon({ ...formCupon, valor_descuento: evento.target.value })} required />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold" htmlFor="descripcion-cupon">Descripcion</label>
+                      <textarea id="descripcion-cupon" className="form-control" rows="2" maxLength="300" placeholder="Ej. Descuento especial por temporada de fin de ano." value={formCupon.descripcion} onChange={(evento) => setFormCupon({ ...formCupon, descripcion: evento.target.value })} />
+                    </div>
+
+                    <div className="row g-3 mb-3">
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="inicio-cupon">Fecha de inicio</label>
+                        <input id="inicio-cupon" type="date" className="form-control" value={formCupon.fecha_inicio} onChange={(evento) => setFormCupon({ ...formCupon, fecha_inicio: evento.target.value })} required />
+                      </div>
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="fin-cupon">Fecha de finalizacion</label>
+                        <input id="fin-cupon" type="date" className="form-control" min={formCupon.fecha_inicio} value={formCupon.fecha_fin} onChange={(evento) => setFormCupon({ ...formCupon, fecha_fin: evento.target.value })} required />
+                      </div>
+                    </div>
+
+                    <div className="row g-3">
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="minimo-cupon">Compra minima</label>
+                        <div className="input-group"><span className="input-group-text">Q</span><input id="minimo-cupon" type="number" className="form-control" min="0" step="0.01" placeholder="Opcional" value={formCupon.monto_minimo} onChange={(evento) => setFormCupon({ ...formCupon, monto_minimo: evento.target.value })} /></div>
+                      </div>
+                      <div className="col-sm-6">
+                        <label className="form-label fw-semibold" htmlFor="usos-cupon">Limite total de usos</label>
+                        <input id="usos-cupon" type="number" className="form-control" min="1" step="1" placeholder="Sin limite" value={formCupon.usos_maximos} onChange={(evento) => setFormCupon({ ...formCupon, usos_maximos: evento.target.value })} />
+                      </div>
+                    </div>
+                  </form>
+
+                  <div className="coupon-clients-panel">
+                    <div className="coupon-panel-title">
+                      <span>2</span>
+                      <div><h3>Selecciona beneficiarios</h3><p>Clientes con reservaciones previas en tus servicios.</p></div>
+                    </div>
+
+                    <div className="coupon-client-actions">
+                      <strong>{clientesSeleccionados.length} seleccionados</strong>
+                      {clientesCupon.length > 0 && (
+                        <button type="button" onClick={() => setClientesSeleccionados(clientesSeleccionados.length === clientesCupon.length ? [] : clientesCupon.map((cliente) => cliente.id))}>
+                          {clientesSeleccionados.length === clientesCupon.length ? "Quitar todos" : "Seleccionar todos"}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="coupon-client-list">
+                      {cargandoCupones ? (
+                        <div className="coupon-empty">Cargando clientes...</div>
+                      ) : clientesCupon.length === 0 ? (
+                        <div className="coupon-empty">Todavia no hay clientes con reservaciones elegibles.</div>
+                      ) : clientesCupon.map((cliente) => (
+                        <label className={`coupon-client ${clientesSeleccionados.includes(cliente.id) ? "is-selected" : ""}`} key={cliente.id}>
+                          <input type="checkbox" checked={clientesSeleccionados.includes(cliente.id)} onChange={() => alternarClienteCupon(cliente.id)} />
+                          <span className="coupon-client-avatar">{cliente.nombre.charAt(0)}{cliente.apellido.charAt(0)}</span>
+                          <span className="coupon-client-info">
+                            <strong>{cliente.nombre} {cliente.apellido}</strong>
+                            <small>{cliente.email}</small>
+                            <small>{cliente.total_reservaciones} reservaciones</small>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <button type="submit" form="coupon-operator-form" className="btn btn-primary w-100 mt-3" disabled={guardandoCupon || clientesSeleccionados.length === 0}>
+                      {guardandoCupon ? "Creando y notificando..." : `Crear cupon para ${clientesSeleccionados.length} cliente${clientesSeleccionados.length === 1 ? "" : "s"}`}
+                    </button>
+                  </div>
                 </div>
-                <div className="mb-3">
-                  <label className="form-label">Valor del Descuento</label>
-                  <input type="number" className="form-control" />
+
+                <div className="coupon-history">
+                  <div className="coupon-history-header"><div><h3>Cupones creados</h3><p>Consulta vigencia, uso y beneficiarios de cada campaña.</p></div><strong>{cuponesOperador.length}</strong></div>
+                  {cargandoCupones ? (
+                    <div className="coupon-empty">Cargando cupones...</div>
+                  ) : cuponesOperador.length === 0 ? (
+                    <div className="coupon-empty">Aun no has creado cupones para tus clientes.</div>
+                  ) : (
+                    <div className="coupon-card-grid">
+                      {cuponesOperador.map((cupon) => (
+                        <article className="coupon-card" key={cupon.id}>
+                          <div className="coupon-card-top">
+                            <span className={`coupon-status coupon-status-${cupon.estado}`}>{cupon.estado}</span>
+                            <span className="coupon-discount">{cupon.tipo_descuento === "porcentaje" ? `${cupon.valor_descuento}%` : `Q${cupon.valor_descuento.toFixed(2)}`}</span>
+                          </div>
+                          <code>{cupon.codigo}</code>
+                          <p>{cupon.descripcion || "Sin descripcion adicional."}</p>
+                          <div className="coupon-card-stats">
+                            <span><b>{cupon.total_beneficiarios}</b> beneficiarios</span>
+                            <span><b>{cupon.usos_actuales}</b> usos</span>
+                          </div>
+                          <small>Vigente del {cupon.fecha_inicio} al {cupon.fecha_fin}</small>
+                          {cupon.monto_minimo !== null && <small>Compra minima: Q{cupon.monto_minimo.toFixed(2)}</small>}
+                          <details className="coupon-beneficiaries">
+                            <summary>Ver beneficiarios</summary>
+                            {cupon.beneficiarios.map((beneficiario) => <span key={beneficiario.id}>{beneficiario.nombre} {beneficiario.canjeado ? "(canjeado)" : ""}</span>)}
+                          </details>
+                          {cupon.estado === "activo" && <button type="button" className="btn btn-outline-danger btn-sm mt-3" onClick={() => desactivarCuponOperador(cupon)}>Desactivar cupon</button>}
+                        </article>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <button className="btn btn-primary w-100">Generar y Enviar Cupón</button>
               </div>
             </div>
           </div>
