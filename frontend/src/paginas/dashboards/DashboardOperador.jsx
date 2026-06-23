@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { jsPDF } from "jspdf";
 import "../../estilos/topNavbar.css";
+import CuponesOperador from "./CuponesOperador";
 
 const formatearHora12 = (hora24) => {
   if (!hora24) return "";
@@ -14,6 +15,65 @@ const formatearHora12 = (hora24) => {
   return `${horas}:${minutosStr} ${ampm}`;
 };
 
+const formatearFecha = (fecha) => new Intl.DateTimeFormat("es-GT", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric"
+}).format(new Date(fecha));
+
+const claveFechaLocal = (fecha) => [
+  fecha.getFullYear(),
+  String(fecha.getMonth() + 1).padStart(2, "0"),
+  String(fecha.getDate()).padStart(2, "0")
+].join("-");
+
+const fechaDesdeClave = (clave) => {
+  const [anio, mes, dia] = clave.split("-").map(Number);
+  return new Date(anio, mes - 1, dia);
+};
+
+const obtenerCeldasMes = (mesActual) => {
+  const anio = mesActual.getFullYear();
+  const mes = mesActual.getMonth();
+  const primerDia = new Date(anio, mes, 1);
+  const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+  const espaciosIniciales = (primerDia.getDay() + 6) % 7;
+  const totalCeldas = Math.ceil((espaciosIniciales + ultimoDia) / 7) * 7;
+
+  return Array.from({ length: totalCeldas }, (_, indice) => {
+    const numeroDia = indice - espaciosIniciales + 1;
+    return numeroDia > 0 && numeroDia <= ultimoDia
+      ? new Date(anio, mes, numeroDia)
+      : null;
+  });
+};
+
+const agruparEnviosPorDia = (reservaciones, mesActual) => {
+  const eventos = {};
+  const inicioMes = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1);
+  const finMes = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0);
+
+  reservaciones.forEach((reservacion) => {
+    const inicioReserva = fechaDesdeClave(reservacion.fecha_inicio);
+    const finReserva = fechaDesdeClave(reservacion.fecha_fin);
+    const inicio = inicioReserva < inicioMes ? inicioMes : inicioReserva;
+    const fin = finReserva > finMes ? finMes : finReserva;
+
+    for (let fecha = new Date(inicio); fecha <= fin; fecha.setDate(fecha.getDate() + 1)) {
+      const clave = claveFechaLocal(fecha);
+      let tipo = "en_curso";
+      if (clave === reservacion.fecha_inicio && clave === reservacion.fecha_fin) tipo = "recoleccion_entrega";
+      else if (clave === reservacion.fecha_inicio) tipo = "recoleccion";
+      else if (clave === reservacion.fecha_fin) tipo = "entrega";
+
+      eventos[clave] = [...(eventos[clave] || []), { ...reservacion, tipo_evento: tipo }];
+    }
+  });
+
+  return eventos;
+};
+
+
 function DashboardOperador() {
   const navigate = useNavigate();
   const [vista, setVista] = useState("inicio");
@@ -21,6 +81,26 @@ function DashboardOperador() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
+  const [calificaciones, setCalificaciones] = useState([]);
+  const [resumenCalificaciones, setResumenCalificaciones] = useState({
+    promedio: 0,
+    total: 0,
+    pendientes_respuesta: 0
+  });
+  const [respuestas, setRespuestas] = useState({});
+  const [cargandoCalificacionesTab, setCargandoCalificacionesTab] = useState(false);
+  const [errorCalificacionesTab, setErrorCalificacionesTab] = useState("");
+  const [respondiendoId, setRespondiendoId] = useState(null);
+  const [mesCalendario, setMesCalendario] = useState(() => {
+    const hoy = new Date();
+    return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  });
+  const [reservacionesCalendario, setReservacionesCalendario] = useState([]);
+  const [serviciosCalendario, setServiciosCalendario] = useState([]);
+  const [servicioCalendario, setServicioCalendario] = useState("");
+  const [diaSeleccionado, setDiaSeleccionado] = useState(null);
+  const [cargandoCalendario, setCargandoCalendario] = useState(false);
+  const [errorCalendario, setErrorCalendario] = useState("");
 
   const [editandoId, setEditandoId] = useState(null);
   const [nombreServicio, setNombreServicio] = useState("");
@@ -35,14 +115,6 @@ function DashboardOperador() {
   const [perfil, setPerfil] = useState(null);
   const [solicitudesCambio, setSolicitudesCambio] = useState([]);
   const [mensajePerfil, setMensajePerfil] = useState("");
-  const [formPerfil, setFormPerfil] = useState({
-    nombre: "",
-    apellido: "",
-    telefono: "",
-    telefono_respaldo: "",
-    zona_operacion: "",
-    genero: "masculino"
-  });
 
   const [pestañaReporte, setPestañaReporte] = useState("ganancias");
   
@@ -65,6 +137,15 @@ function DashboardOperador() {
   const [reporteCalificaciones, setReporteCalificaciones] = useState([]);
   const [cargandoCalificaciones, setCargandoCalificaciones] = useState(false);
   const [errorCalificaciones, setErrorCalificaciones] = useState("");
+
+  const [formPerfil, setFormPerfil] = useState({
+    nombre: "",
+    apellido: "",
+    telefono: "",
+    telefono_respaldo: "",
+    zona_operacion: "",
+    genero: "masculino"
+  });
 
   const token = localStorage.getItem("token");
 
@@ -107,6 +188,127 @@ function DashboardOperador() {
       console.error("Error al cargar solicitudes de cambio", error);
     }
   };
+
+  const cargarCalificaciones = async () => {
+    setCargandoCalificacionesTab(true);
+    setErrorCalificacionesTab("");
+
+    try {
+      const respuesta = await fetch("http://localhost:3000/api/operador/calificaciones", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        setErrorCalificacionesTab(data.message || "No se pudieron cargar las calificaciones.");
+        return;
+      }
+
+      setCalificaciones(data.data.items || []);
+      setResumenCalificaciones(data.data.resumen || {
+        promedio: 0,
+        total: 0,
+        pendientes_respuesta: 0
+      });
+    } catch {
+      setErrorCalificacionesTab("No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoCalificacionesTab(false);
+    }
+  };
+
+  const responderCalificacion = async (calificacionId) => {
+    const textoRespuesta = (respuestas[calificacionId] || "").trim();
+
+    if (!textoRespuesta) {
+      setErrorCalificacionesTab("Escribe una respuesta antes de publicarla.");
+      return;
+    }
+
+    setRespondiendoId(calificacionId);
+    setErrorCalificacionesTab("");
+
+    try {
+      const respuesta = await fetch(
+        `http://localhost:3000/api/operador/calificaciones/${calificacionId}/respuesta`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ respuesta: textoRespuesta })
+        }
+      );
+      const data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        setErrorCalificacionesTab(data.message || "No se pudo publicar la respuesta.");
+        return;
+      }
+
+      setRespuestas((actuales) => ({ ...actuales, [calificacionId]: "" }));
+      await cargarCalificaciones();
+      await Swal.fire({
+        title: "Respuesta publicada",
+        text: "Tu respuesta quedo guardada junto a la resena.",
+        confirmButtonText: "Aceptar"
+      });
+    } catch {
+      setErrorCalificacionesTab("No se pudo conectar con el servidor.");
+    } finally {
+      setRespondiendoId(null);
+    }
+  };
+
+  const cargarCalendario = async () => {
+    const inicioMes = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth(), 1);
+    const finMes = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() + 1, 0);
+    const parametros = new URLSearchParams({
+      desde: claveFechaLocal(inicioMes),
+      hasta: claveFechaLocal(finMes)
+    });
+
+    if (servicioCalendario) parametros.set("servicio_id", servicioCalendario);
+
+    setCargandoCalendario(true);
+    setErrorCalendario("");
+
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/operador/calendario?${parametros}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        setErrorCalendario(data.message || "No se pudo cargar el calendario.");
+        return;
+      }
+
+      const reservaciones = data.data.reservaciones || [];
+      const eventos = agruparEnviosPorDia(reservaciones, mesCalendario);
+      const hoy = claveFechaLocal(new Date());
+      const prefijoMes = claveFechaLocal(inicioMes).slice(0, 7);
+
+      setReservacionesCalendario(reservaciones);
+      setServiciosCalendario(data.data.servicios || []);
+      setDiaSeleccionado((actual) => {
+        if (actual?.startsWith(prefijoMes)) return actual;
+        if (hoy.startsWith(prefijoMes)) return hoy;
+        return Object.keys(eventos).sort()[0] || claveFechaLocal(inicioMes);
+      });
+    } catch {
+      setErrorCalendario("No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoCalendario(false);
+    }
+  };
+
+  const cambiarMesCalendario = (cantidad) => {
+    setMesCalendario((actual) => new Date(actual.getFullYear(), actual.getMonth() + cantidad, 1));
+  };
+
+
 
   const cargarReporteGananciasOperador = async () => {
     setCargandoReporteGanancias(true);
@@ -187,28 +389,85 @@ function DashboardOperador() {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     let y = 40;
-    const margin = 40;
+    const margin = 30;
     const pageBottom = pageHeight - margin;
     const maxWidth = pageWidth - margin * 2;
+
+    // Accent header banner on page 1
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(margin, y, maxWidth, 45, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(titulo, margin + 15, y + 27);
+    
+    // Reset defaults
+    doc.setTextColor(51, 65, 85); // slate-700
+    doc.setFont("helvetica", "normal");
+    y += 60;
 
     const agregarTexto = (texto, opciones = {}) => {
       const ancho = maxWidth;
       const lineas = doc.splitTextToSize(texto, ancho);
+      doc.setFont("helvetica", opciones.fontWeight || "normal");
+      doc.setFontSize(opciones.fontSize || 10);
+      doc.setTextColor(opciones.textColor ? opciones.textColor.r : 51, opciones.textColor ? opciones.textColor.g : 65, opciones.textColor ? opciones.textColor.b : 85);
+      
       lineas.forEach((linea) => {
         const nextLineHeight = opciones.lineHeight || 14;
         if (y + nextLineHeight > pageBottom) {
           doc.addPage();
           y = margin;
         }
-        doc.setFontSize(opciones.fontSize || 10);
         doc.text(linea, margin, y);
         y += nextLineHeight;
       });
     };
 
+    const dibujarTarjetasResumen = (tarjetas) => {
+      const numTarjetas = tarjetas.length;
+      const gap = 12;
+      const totalGapWidth = gap * (numTarjetas - 1);
+      const widthTarjeta = (maxWidth - totalGapWidth) / numTarjetas;
+      const heightTarjeta = 45;
+
+      if (y + heightTarjeta > pageBottom) {
+        doc.addPage();
+        y = margin;
+      }
+
+      let currentX = margin;
+      tarjetas.forEach((tarjeta) => {
+        // Background
+        doc.setFillColor(248, 250, 252); // slate-50
+        doc.rect(currentX, y, widthTarjeta, heightTarjeta, "F");
+        
+        // Border
+        doc.setDrawColor(226, 232, 240); // slate-200
+        doc.setLineWidth(1);
+        doc.rect(currentX, y, widthTarjeta, heightTarjeta, "S");
+
+        // Title
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139); // slate-500
+        doc.text(tarjeta.titulo, currentX + 10, y + 16);
+
+        // Value
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(15, 23, 42); // slate-900
+        doc.text(tarjeta.valor, currentX + 10, y + 33);
+
+        currentX += widthTarjeta + gap;
+      });
+
+      y += heightTarjeta + 15;
+    };
+
     const dibujarTabla = (headers, rows, options = {}) => {
       let columnWidths = options.columnWidths || [120, 90, 70, 55, 70, 70, 70];
-      const rowHeight = options.rowHeight || 18;
+      const rowHeight = options.rowHeight || 20;
       columnWidths = columnWidths.slice(0, headers.length);
       let tableWidth = columnWidths.reduce((sum, w) => sum + w, 0);
 
@@ -222,7 +481,7 @@ function DashboardOperador() {
         let x = margin;
         const headerLineHeight = options.lineHeight || 14;
         const headerLines = columnWidths.map((w, index) => {
-          const maxTextWidth = Math.max(w - 8, 10);
+          const maxTextWidth = Math.max(w - 12, 10);
           return doc.splitTextToSize(String(headers[index] || ""), maxTextWidth);
         });
         const headerHeights = headerLines.map((lines) => Math.max(lines.length * headerLineHeight, rowHeight));
@@ -233,17 +492,17 @@ function DashboardOperador() {
           y = margin;
         }
 
-        doc.setFillColor(240, 240, 240);
+        doc.setFillColor(30, 41, 59); // slate-800
         doc.rect(x, y, tableWidth, headerHeight, "F");
-        doc.setDrawColor(180);
-        doc.rect(x, y, tableWidth, headerHeight);
-        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(255, 255, 255); // White text
 
         columnWidths.forEach((w, index) => {
           const lines = headerLines[index] || [""];
           let textY = y + 13;
           lines.forEach((line) => {
-            doc.text(String(line), x + 4, textY);
+            doc.text(String(line), x + 6, textY);
             textY += headerLineHeight;
           });
           x += w;
@@ -254,12 +513,14 @@ function DashboardOperador() {
 
       drawHeader();
 
-      const cellLineHeight = options.lineHeight || 14;
+      const cellLineHeight = options.lineHeight || 13;
+      let isEven = false;
+      
       rows.forEach((row) => {
         const cellLines = row.map((cell, index) => {
           const text = String(cell || "");
           const colWidth = columnWidths[index] || 50;
-          const maxTextWidth = Math.max(colWidth - 8, 10);
+          const maxTextWidth = Math.max(colWidth - 12, 10);
           return doc.splitTextToSize(text, maxTextWidth);
         });
 
@@ -272,45 +533,58 @@ function DashboardOperador() {
 
         let x = margin;
         columnWidths.forEach((w, index) => {
-          doc.setDrawColor(180);
-          doc.rect(x, y, w, maxCellHeight);
+          // Zebra background
+          if (isEven) {
+            doc.setFillColor(248, 250, 252); // slate-50
+          } else {
+            doc.setFillColor(255, 255, 255); // white
+          }
+          doc.rect(x, y, w, maxCellHeight, "F");
+          
+          // Border
+          doc.setDrawColor(226, 232, 240); // slate-200
+          doc.setLineWidth(1);
+          doc.rect(x, y, w, maxCellHeight, "S");
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.5);
+          doc.setTextColor(51, 65, 85); // slate-700
+
           const lines = cellLines[index] || [""];
-          doc.setFontSize(10);
           let textY = y + 13;
           lines.forEach((line) => {
-            doc.text(String(line), x + 4, textY);
+            doc.text(String(line), x + 6, textY);
             textY += cellLineHeight;
           });
           x += w;
         });
 
         y += maxCellHeight;
+        isEven = !isEven;
       });
 
       y += 10;
     };
 
-    doc.setFontSize(16);
-    doc.text(titulo, margin, y);
-    y += 24;
-
-    return { doc, agregarTexto, dibujarTabla, yRef: () => y, setY: (valor) => { y = valor; } };
+    return { doc, agregarTexto, dibujarTabla, dibujarTarjetasResumen, yRef: () => y, setY: (valor) => { y = valor; } };
   };
 
   const generarPDF = (mode = "general") => {
     try {
       const { data, totales } = reporteGananciasOperador;
       const title = `Reporte de Ganancias - ${perfil?.email || ""}`;
-      const { doc, agregarTexto, dibujarTabla, setY } = crearDocumentoPdf(title);
+      const { doc, agregarTexto, dibujarTabla, dibujarTarjetasResumen } = crearDocumentoPdf(title);
 
       agregarTexto(`Generado: ${new Date().toLocaleString()}`, { fontSize: 10, lineHeight: 16 });
       agregarTexto(" ");
-      agregarTexto("Resumen General", { fontSize: 12, lineHeight: 16 });
-      agregarTexto(`Reservaciones: ${totales.total_reservaciones}`);
-      agregarTexto(`Ingresos: Q${parseFloat(totales.ingresos_totales || 0).toFixed(2)}`);
-      agregarTexto(`Ganancias: Q${parseFloat(totales.ganancias_operador || 0).toFixed(2)}`);
-      agregarTexto(`Comisión Plataforma: Q${parseFloat(totales.comision_plataforma || 0).toFixed(2)}`);
-      agregarTexto(" ");
+
+      dibujarTarjetasResumen([
+        { titulo: "Reservaciones", valor: String(totales.total_reservaciones) },
+        { titulo: "Ingresos", valor: `Q${parseFloat(totales.ingresos_totales || 0).toFixed(2)}` },
+        { titulo: "Ganancias (80%)", valor: `Q${parseFloat(totales.ganancias_operador || 0).toFixed(2)}` },
+        { titulo: "Comisión (20%)", valor: `Q${parseFloat(totales.comision_plataforma || 0).toFixed(2)}` }
+      ]);
+
       agregarTexto("Detalle por Servicio", { fontSize: 12, lineHeight: 16 });
 
       const rows = data.map((s) => [
@@ -331,15 +605,31 @@ function DashboardOperador() {
         "Ingresos",
         "Ganancias",
         "Comisión"
-      ], rows, { columnWidths: [130, 90, 65, 110, 80, 80, 80] });
+      ], rows, { columnWidths: [170, 115, 80, 115, 100, 100, 100] });
 
       if (mode === "por_servicio") {
         data.forEach((s) => {
           agregarTexto(" ");
-          agregarTexto(`Detalle del servicio: ${s.nombre_servicio || ""}`, { fontSize: 12, lineHeight: 16 });
-          agregarTexto(`Descripción: ${s.descripcion || "N/A"}`);
-          agregarTexto(`Zona: ${s.zona_cobertura || "N/A"} | Estado: ${s.estado || "N/A"}`);
-          agregarTexto(`Horario: ${s.horario_disponible || "N/A"} | Capacidad: ${s.capacidad_carga_kg || "N/A"} kg | Precio envío: Q${parseFloat(s.precio_envio || 0).toFixed(2)}`);
+          agregarTexto(`Detalle del servicio: ${s.nombre_servicio || ""}`, { fontSize: 12, fontWeight: "bold", lineHeight: 16 });
+          agregarTexto(`Descripción: ${s.descripcion || "Sin descripción"}`);
+          agregarTexto(" ");
+
+          dibujarTabla([
+            "Zona Cobertura",
+            "Estado",
+            "Horario Disponible",
+            "Capacidad",
+            "Precio Envío"
+          ], [
+            [
+              s.zona_cobertura || "N/A",
+              s.estado || "N/A",
+              s.horario_disponible || "N/A",
+              `${parseFloat(s.capacidad_carga_kg || 0).toFixed(2)} kg`,
+              `Q${parseFloat(s.precio_envio || 0).toFixed(2)}`
+            ]
+          ], { columnWidths: [155, 100, 220, 155, 150] });
+
           agregarTexto(" ");
 
           const servicioRows = (s.reservaciones || []).map((r) => [
@@ -365,18 +655,108 @@ function DashboardOperador() {
               "Ganancia",
               "Comisión",
               "Estado"
-            ], servicioRows, { columnWidths: [100, 80, 80, 80, 55, 55, 60, 60, 45] });
+            ], servicioRows, { columnWidths: [120, 135, 100, 100, 50, 60, 75, 70, 70] });
           } else {
             agregarTexto("No hay reservaciones disponibles.");
           }
         });
       }
 
-      agregarTexto(" ");
-      agregarTexto("Reporte generado desde TrackFlow-HUB", { fontSize: 9, lineHeight: 14 });
-      doc.save(`reporte_ganancias_${Date.now()}.pdf`);
+      doc.save(`reporte_ganancias.pdf`);
     } catch (err) {
       console.error("Error generando PDF:", err);
+      alert("No se pudo generar el PDF.");
+    }
+  };
+
+  const generarPDFClientes = () => {
+    try {
+      const title = `Historial de Clientes - ${perfil?.email || ""}`;
+      const { doc, agregarTexto, dibujarTabla, dibujarTarjetasResumen } = crearDocumentoPdf(title);
+
+      agregarTexto(`Generado: ${new Date().toLocaleString()}`, { fontSize: 10, lineHeight: 16 });
+      agregarTexto(" ");
+
+      // Calculate stats
+      const totalClientes = historialClientes.length;
+      const totalServicios = historialClientes.reduce((acc, c) => acc + parseInt(c.total_reservaciones || 0), 0);
+      const clienteFrecuente = totalClientes > 0 ? `${historialClientes[0].nombre} ${historialClientes[0].apellido}` : "N/A";
+
+      dibujarTarjetasResumen([
+        { titulo: "Total de Clientes", valor: String(totalClientes) },
+        { titulo: "Servicios Brindados", valor: String(totalServicios) },
+        { titulo: "Cliente Frecuente", valor: clienteFrecuente }
+      ]);
+
+      agregarTexto("Detalle de Clientes", { fontSize: 12, lineHeight: 16 });
+
+      const rows = historialClientes.map((c) => [
+        `${c.nombre || ""} ${c.apellido || ""}`,
+        c.email || "",
+        c.telefono || "",
+        c.total_reservaciones || "0",
+        `Q${parseFloat(c.total_gastado || 0).toFixed(2)}`,
+        c.ultima_reservacion ? new Date(c.ultima_reservacion).toLocaleDateString() : "N/A"
+      ]);
+
+      dibujarTabla([
+        "Cliente",
+        "Correo Electrónico",
+        "Teléfono",
+        "Servicios",
+        "Total Invertido",
+        "Último Servicio"
+      ], rows, { columnWidths: [160, 200, 100, 100, 110, 110] });
+
+      doc.save(`historial_clientes.pdf`);
+    } catch (err) {
+      console.error("Error generando PDF clientes:", err);
+      alert("No se pudo generar el PDF.");
+    }
+  };
+
+  const generarPDFCalificaciones = () => {
+    try {
+      const title = `Reporte de Calificaciones - ${perfil?.email || ""}`;
+      const { doc, agregarTexto, dibujarTabla, dibujarTarjetasResumen } = crearDocumentoPdf(title);
+
+      agregarTexto(`Generado: ${new Date().toLocaleString()}`, { fontSize: 10, lineHeight: 16 });
+      agregarTexto(" ");
+
+      // Calculate stats
+      const totalReseñas = reporteCalificaciones.length;
+      const promedioReseñas = totalReseñas > 0
+        ? (reporteCalificaciones.reduce((acc, c) => acc + c.puntuacion, 0) / totalReseñas).toFixed(1)
+        : "0.0";
+      const reseñas5Estrellas = reporteCalificaciones.filter(c => c.puntuacion === 5).length;
+
+      dibujarTarjetasResumen([
+        { titulo: "Total de Reseñas", valor: String(totalReseñas) },
+        { titulo: "Promedio General", valor: `${promedioReseñas} / 5.0` },
+        { titulo: "Reseñas 5 Estrellas", valor: String(reseñas5Estrellas) }
+      ]);
+
+      agregarTexto("Detalle de Calificaciones", { fontSize: 12, lineHeight: 16 });
+
+      const rows = reporteCalificaciones.map((c) => [
+        `${c.cliente_nombre || ""} ${c.cliente_apellido || ""}`,
+        c.nombre_servicio || "",
+        c.fecha ? new Date(c.fecha).toLocaleDateString() : "N/A",
+        "★".repeat(c.puntuacion) + "☆".repeat(5 - c.puntuacion),
+        c.comentario || "Sin comentario"
+      ]);
+
+      dibujarTabla([
+        "Cliente",
+        "Servicio",
+        "Fecha",
+        "Calificación",
+        "Comentario"
+      ], rows, { columnWidths: [135, 145, 90, 90, 320] });
+
+      doc.save(`reporte_calificaciones.pdf`);
+    } catch (err) {
+      console.error("Error generando PDF calificaciones:", err);
       alert("No se pudo generar el PDF.");
     }
   };
@@ -410,15 +790,32 @@ function DashboardOperador() {
 
     try {
       const title = `Reporte Detallado - ${servicio.nombre_servicio || ''}`;
-      const pdfName = `reporte_servicio_${servicio.id}_${Date.now()}.pdf`;
+      const nombreLimpio = (servicio.nombre_servicio || "servicio").toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const pdfName = `reporte_servicio_${nombreLimpio}.pdf`;
       const { doc, agregarTexto, dibujarTabla } = crearDocumentoPdf(title);
 
       agregarTexto(`Generado: ${new Date().toLocaleString()}`, { fontSize: 10, lineHeight: 16 });
       agregarTexto(' ');
-      agregarTexto(`Servicio: ${servicio.nombre_servicio || ''}`, { fontSize: 12, lineHeight: 18 });
+      agregarTexto(`Servicio: ${servicio.nombre_servicio || ''}`, { fontSize: 12, fontWeight: "bold", lineHeight: 18 });
       agregarTexto(`Descripción: ${servicio.descripcion || 'N/A'}`);
-      agregarTexto(`Zona: ${servicio.zona_cobertura || 'N/A'} | Estado: ${servicio.estado || 'N/A'}`);
-      agregarTexto(`Horario: ${servicio.horario_disponible || 'N/A'} | Capacidad: ${servicio.capacidad_carga_kg || 'N/A'} kg | Precio: Q${parseFloat(servicio.precio_envio || 0).toFixed(2)}`);
+      agregarTexto(' ');
+
+      dibujarTabla([
+        "Zona Cobertura",
+        "Estado",
+        "Horario Disponible",
+        "Capacidad de Carga",
+        "Precio por Envío"
+      ], [
+        [
+          servicio.zona_cobertura || 'N/A',
+          servicio.estado || 'N/A',
+          servicio.horario_disponible || 'N/A',
+          `${parseFloat(servicio.capacidad_carga_kg || 0).toFixed(2)} kg`,
+          `Q${parseFloat(servicio.precio_envio || 0).toFixed(2)}`
+        ]
+      ], { columnWidths: [155, 100, 220, 155, 150] });
+
       agregarTexto(' ');
       agregarTexto('Reservaciones del servicio', { fontSize: 12, lineHeight: 18 });
 
@@ -446,20 +843,19 @@ function DashboardOperador() {
           'Comisión',
           'Estado'
         ], rows, {
-          columnWidths: [90, 70, 80, 80, 45, 55, 60, 60, 55]
+          columnWidths: [120, 135, 100, 100, 50, 60, 75, 70, 70]
         });
       } else {
         agregarTexto('No hay reservaciones para este servicio.');
       }
 
-      agregarTexto(' ');
-      agregarTexto('Reporte generado desde TrackFlow-HUB', { fontSize: 9, lineHeight: 14 });
       doc.save(pdfName);
     } catch (err) {
       console.error('Error generando PDF por servicio:', err);
       alert('No se pudo generar el PDF por servicio.');
     }
   };
+
 
   const solicitarCambioPerfil = async () => {
     if (!formPerfil.nombre || !formPerfil.apellido || !formPerfil.telefono || !formPerfil.zona_operacion || !formPerfil.genero) {
@@ -569,23 +965,32 @@ function DashboardOperador() {
 
   useEffect(() => {
     if (vista === "inicio") {
+      cargarPerfil();
       cargarServicios();
+      cargarCalificaciones();
       cargarReporteGananciasOperador();
     } else if (vista === "servicios") {
       cargarServicios();
+    } else if (vista === "calendario") {
+      cargarCalendario();
+    } else if (vista === "calificaciones") {
+      cargarCalificaciones();
+    } else if (vista === "cupones") {
+      // Cargado por CuponesOperador
     } else if (vista === "perfil") {
       cargarPerfil();
       cargarSolicitudesCambio();
     } else if (vista === "reportes") {
+      cargarPerfil();
       if (pestañaReporte === "ganancias") {
         cargarReporteGananciasOperador();
       } else if (pestañaReporte === "clientes") {
         cargarHistorialClientes();
       } else if (pestañaReporte === "calificaciones") {
-        cargarReporteCalificaciones(); // SE CARGA EL NUEVO REPORTE AQUÍ
+        cargarReporteCalificaciones();
       }
     }
-  }, [vista, pestañaReporte]);
+  }, [vista, mesCalendario, servicioCalendario, pestañaReporte]);
 
   const manejarRegistroServicio = async (e) => {
     e.preventDefault();
@@ -826,13 +1231,28 @@ function DashboardOperador() {
     navigate("/");
   };
 
-  const serviciosActivos = servicios.filter(s => s.estado === "activo").length;
-  const serviciosConCalif = servicios.filter(s => parseFloat(s.calificacion_promedio) > 0);
-  const calificacionGeneral = serviciosConCalif.length > 0
-    ? (serviciosConCalif.reduce((acc, s) => acc + parseFloat(s.calificacion_promedio), 0) / serviciosConCalif.length).toFixed(1)
-    : "0.0";
+  const celdasCalendario = obtenerCeldasMes(mesCalendario);
+  const eventosCalendario = agruparEnviosPorDia(reservacionesCalendario, mesCalendario);
+  const enviosDiaSeleccionado = diaSeleccionado ? eventosCalendario[diaSeleccionado] || [] : [];
+  const nombreMesCalendario = new Intl.DateTimeFormat("es-GT", {
+    month: "long",
+    year: "numeric"
+  }).format(mesCalendario);
+  const tituloDiaSeleccionado = diaSeleccionado
+    ? new Intl.DateTimeFormat("es-GT", {
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    }).format(fechaDesdeClave(diaSeleccionado))
+    : "Selecciona un dia";
 
-  // CÁLCULOS DINÁMICOS PARA LA PESTAÑA DE CALIFICACIONES
+  const etiquetaEvento = {
+    recoleccion: "Recoleccion",
+    entrega: "Entrega",
+    en_curso: "En curso",
+    recoleccion_entrega: "Recoleccion y entrega"
+  };
+
   const totalReseñas = reporteCalificaciones.length;
   const promedioReseñas = totalReseñas > 0
     ? (reporteCalificaciones.reduce((acc, c) => acc + c.puntuacion, 0) / totalReseñas).toFixed(1)
@@ -937,20 +1357,24 @@ function DashboardOperador() {
                   <div className="col-md-3 mb-3">
                     <div className="p-3 border rounded bg-light">
                       <h3 className="fw-bold text-primary">
-                        Q{parseFloat(reporteGananciasOperador.totales.ganancias_operador || 0).toFixed(2)}
+                        Q{(reporteGananciasOperador?.totales?.ganancias_operador || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </h3>
                       <span className="text-muted">Mis Ganancias (80%)</span>
                     </div>
                   </div>
                   <div className="col-md-3 mb-3">
                     <div className="p-3 border rounded bg-light">
-                      <h3 className="fw-bold text-success">{serviciosActivos}</h3>
+                      <h3 className="fw-bold text-success">
+                        {servicios.filter(s => s.estado === "activo").length}
+                      </h3>
                       <span className="text-muted">Servicios Activos</span>
                     </div>
                   </div>
                   <div className="col-md-3 mb-3">
                     <div className="p-3 border rounded bg-light">
-                      <h3 className="fw-bold text-warning">{calificacionGeneral} / 5</h3>
+                      <h3 className="fw-bold text-warning">
+                        {resumenCalificaciones?.total > 0 ? `${resumenCalificaciones.promedio.toFixed(1)} / 5` : "0.0 / 5"}
+                      </h3>
                       <span className="text-muted">Calificación General</span>
                     </div>
                   </div>
@@ -1214,17 +1638,124 @@ function DashboardOperador() {
           <div className="row">
             <div className="col-12">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Calendario de Envíos Programados</h2>
-                <p className="text-muted">Fechas reservadas por los clientes para recolección y entrega.</p>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-2 border rounded bg-light">
-                    <div className="d-flex w-100 justify-content-between">
-                      <h6 className="fw-bold">Fecha: 19/06/2026</h6>
-                      <small className="text-primary fw-bold">Q45.00</small>
-                    </div>
-                    <p className="mb-0 text-muted">Cliente: Juan Pérez. Dirección de recolección: Zona 10. Paquete: Documentos.</p>
+                <div className="calendar-header">
+                  <div>
+                    <h2 className="dashboard-card-title mb-1">Calendario de envios programados</h2>
+                    <p className="text-muted mb-0">Consulta las recolecciones, envios en curso y entregas de todos tus servicios.</p>
+                  </div>
+                  <div className="calendar-filter">
+                    <label htmlFor="servicio-calendario">Vista por servicio</label>
+                    <select
+                      id="servicio-calendario"
+                      className="form-select form-select-sm"
+                      value={servicioCalendario}
+                      onChange={(evento) => setServicioCalendario(evento.target.value)}
+                    >
+                      <option value="">Todos mis servicios</option>
+                      {serviciosCalendario.map((servicio) => (
+                        <option value={servicio.id} key={servicio.id}>{servicio.nombre_servicio}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
+
+                {errorCalendario && <div className="alert alert-danger mt-3" role="alert">{errorCalendario}</div>}
+
+                <div className="calendar-toolbar">
+                  <button type="button" className="calendar-nav-button" onClick={() => cambiarMesCalendario(-1)} aria-label="Mes anterior">‹</button>
+                  <h3>{nombreMesCalendario}</h3>
+                  <button type="button" className="calendar-nav-button" onClick={() => cambiarMesCalendario(1)} aria-label="Mes siguiente">›</button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm calendar-today-button"
+                    onClick={() => {
+                      const hoy = new Date();
+                      setMesCalendario(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+                      setDiaSeleccionado(claveFechaLocal(hoy));
+                    }}
+                  >
+                    Hoy
+                  </button>
+                </div>
+
+                <div className={`calendar-month ${cargandoCalendario ? "calendar-loading" : ""}`}>
+                  {["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"].map((dia) => (
+                    <div className="calendar-weekday" key={dia}>{dia}</div>
+                  ))}
+
+                  {celdasCalendario.map((fecha, indice) => {
+                    if (!fecha) return <div className="calendar-day calendar-day-empty" key={`vacio-${indice}`} />;
+
+                    const clave = claveFechaLocal(fecha);
+                    const eventos = eventosCalendario[clave] || [];
+                    const esHoy = clave === claveFechaLocal(new Date());
+                    const estaSeleccionado = clave === diaSeleccionado;
+
+                    return (
+                      <button
+                        type="button"
+                        className={`calendar-day ${esHoy ? "is-today" : ""} ${estaSeleccionado ? "is-selected" : ""}`}
+                        key={clave}
+                        onClick={() => setDiaSeleccionado(clave)}
+                      >
+                        <span className="calendar-day-number">{fecha.getDate()}</span>
+                        <span className="calendar-events">
+                          {eventos.slice(0, 3).map((evento) => (
+                            <span className={`calendar-event event-${evento.tipo_evento}`} key={`${evento.id}-${evento.tipo_evento}`}>
+                              <b>{etiquetaEvento[evento.tipo_evento]}</b>
+                              <span>{evento.nombre_servicio}</span>
+                            </span>
+                          ))}
+                          {eventos.length > 3 && <span className="calendar-more">+{eventos.length - 3} mas</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="calendar-legend">
+                  <span><i className="legend-pickup" /> Recoleccion</span>
+                  <span><i className="legend-progress" /> En curso</span>
+                  <span><i className="legend-delivery" /> Entrega</span>
+                </div>
+
+                <section className="calendar-day-detail">
+                  <div className="calendar-day-detail-header">
+                    <div>
+                      <span>Agenda del dia</span>
+                      <h3>{tituloDiaSeleccionado}</h3>
+                    </div>
+                    <strong>{enviosDiaSeleccionado.length} {enviosDiaSeleccionado.length === 1 ? "envio" : "envios"}</strong>
+                  </div>
+
+                  {cargandoCalendario ? (
+                    <div className="rating-empty-state">Cargando agenda...</div>
+                  ) : enviosDiaSeleccionado.length === 0 ? (
+                    <div className="rating-empty-state">No hay envios programados para este dia.</div>
+                  ) : (
+                    <div className="calendar-detail-list">
+                      {enviosDiaSeleccionado.map((envio) => (
+                        <article className="calendar-shipment-card" key={`${envio.id}-${envio.tipo_evento}`}>
+                          <div className="calendar-shipment-top">
+                            <div>
+                              <span className={`shipment-type event-${envio.tipo_evento}`}>{etiquetaEvento[envio.tipo_evento]}</span>
+                              <h4>{envio.nombre_servicio}</h4>
+                            </div>
+                            <span className={`shipment-status status-${envio.estado}`}>{envio.estado.replace("_", " ")}</span>
+                          </div>
+                          <div className="calendar-shipment-grid">
+                            <p><b>Cliente</b><span>{envio.cliente}</span></p>
+                            <p><b>Telefono</b><span>{envio.cliente_telefono}</span></p>
+                            <p><b>Origen</b><span>{envio.direccion_origen || "Sin especificar"}</span></p>
+                            <p><b>Destino</b><span>{envio.direccion_destino || "Sin especificar"}</span></p>
+                            <p><b>Paquete</b><span>{envio.descripcion_paquete || "Sin descripcion"}</span></p>
+                            <p><b>Peso</b><span>{envio.peso_paquete_kg === null ? "Sin especificar" : `${envio.peso_paquete_kg} kg`}</span></p>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
               </div>
             </div>
           </div>
@@ -1234,23 +1765,81 @@ function DashboardOperador() {
           <div className="row">
             <div className="col-12">
               <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Calificaciones de Clientes</h2>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-3 border rounded">
-                    <div className="d-flex w-100 justify-content-between">
-                      <h6 className="fw-bold">Cliente: Juan Pérez</h6>
-                      <small className="text-warning">Puntuación: 5 / 5</small>
-                    </div>
-                    <p className="mb-2 text-muted">El paquete llegó a tiempo y en perfectas condiciones.</p>
-                    <div className="p-2 border rounded bg-light">
-                      <label className="form-label mb-1 fw-bold" style={{ fontSize: "12px" }}>Responder a este comentario</label>
-                      <div className="d-flex gap-2">
-                        <input type="text" className="form-control form-control-sm" placeholder="Escribe tu respuesta" />
-                        <button className="btn btn-sm btn-primary">Responder</button>
-                      </div>
-                    </div>
+                <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+                  <div>
+                    <h2 className="dashboard-card-title mb-1">Calificaciones y reseñas</h2>
+                    <p className="text-muted mb-0">Conoce la experiencia de tus clientes y responde sus comentarios.</p>
                   </div>
+                  <button type="button" className="btn btn-outline-primary btn-sm" onClick={cargarCalificaciones} disabled={cargandoCalificacionesTab}>
+                    {cargandoCalificacionesTab ? "Actualizando..." : "Actualizar"}
+                  </button>
                 </div>
+
+                <div className="rating-summary-grid mb-4">
+                  <div className="rating-summary-card"><span>Promedio general</span><strong>{resumenCalificaciones.promedio.toFixed(1)} / 5</strong></div>
+                  <div className="rating-summary-card"><span>Reseñas recibidas</span><strong>{resumenCalificaciones.total}</strong></div>
+                  <div className="rating-summary-card"><span>Por responder</span><strong>{resumenCalificaciones.pendientes_respuesta}</strong></div>
+                </div>
+
+                {errorCalificacionesTab && <div className="alert alert-danger" role="alert">{errorCalificacionesTab}</div>}
+
+                {cargandoCalificacionesTab ? (
+                  <div className="rating-empty-state">Cargando calificaciones...</div>
+                ) : calificaciones.length === 0 ? (
+                  <div className="rating-empty-state">
+                    <h3>Aún no tienes calificaciones</h3>
+                    <p>Las reseñas aparecerán aquí cuando tus clientes califiquen un servicio finalizado.</p>
+                  </div>
+                ) : (
+                  <div className="d-flex flex-column gap-3">
+                    {calificaciones.map((calificacion) => (
+                      <article className="rating-review-card" key={calificacion.id}>
+                        <div className="d-flex flex-wrap justify-content-between gap-2">
+                          <div>
+                            <h3 className="rating-client-name">{calificacion.cliente}</h3>
+                            <p className="rating-service-name mb-0">{calificacion.nombre_servicio}</p>
+                          </div>
+                          <div className="text-md-end">
+                            <div className="rating-stars" aria-label={`${calificacion.puntuacion} de 5 estrellas`}>
+                              {"★".repeat(calificacion.puntuacion)}<span>{"★".repeat(5 - calificacion.puntuacion)}</span>
+                            </div>
+                            <small className="text-muted">{formatearFecha(calificacion.created_at)}</small>
+                          </div>
+                        </div>
+
+                        <p className="rating-comment">{calificacion.comentario || "El cliente no dejó un comentario."}</p>
+
+                        {calificacion.respuesta_id ? (
+                          <div className="rating-response">
+                            <strong>Tu respuesta</strong>
+                            <p>{calificacion.respuesta}</p>
+                            <small>{formatearFecha(calificacion.respuesta_created_at)}</small>
+                          </div>
+                        ) : (
+                          <div className="rating-response-form">
+                            <label htmlFor={`respuesta-${calificacion.id}`} className="form-label fw-bold">Responder al cliente</label>
+                            <textarea
+                              id={`respuesta-${calificacion.id}`}
+                              className="form-control"
+                              rows="3"
+                              maxLength="1000"
+                              placeholder="Agradece el comentario o aclara la situación de forma profesional."
+                              value={respuestas[calificacion.id] || ""}
+                              onChange={(evento) => setRespuestas((actuales) => ({ ...actuales, [calificacion.id]: evento.target.value }))}
+                              disabled={respondiendoId === calificacion.id}
+                            />
+                            <div className="d-flex justify-content-between align-items-center mt-2">
+                              <small className="text-muted">{(respuestas[calificacion.id] || "").length} / 1000</small>
+                              <button type="button" className="btn btn-primary btn-sm" onClick={() => responderCalificacion(calificacion.id)} disabled={respondiendoId === calificacion.id}>
+                                {respondiendoId === calificacion.id ? "Publicando..." : "Publicar respuesta"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1390,13 +1979,18 @@ function DashboardOperador() {
                   <h2 className="dashboard-card-title">Historial de Clientes</h2>
                   <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                     <p className="text-muted mb-0">Listado de personas que han utilizado tus servicios.</p>
-                    <button
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={cargarHistorialClientes}
-                      disabled={cargandoClientes}
-                    >
-                      {cargandoClientes ? "Actualizando..." : "Actualizar"}
-                    </button>
+                    <div className="d-flex gap-2">
+                      <button
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={cargarHistorialClientes}
+                        disabled={cargandoClientes}
+                      >
+                        {cargandoClientes ? "Actualizando..." : "Actualizar"}
+                      </button>
+                      <button className="btn btn-sm btn-outline-secondary" onClick={generarPDFClientes}>
+                        Descargar .PDF de Historial
+                      </button>
+                    </div>
                   </div>
                   {errorClientes && (
                     <div className="alert alert-danger py-2">{errorClientes}</div>
@@ -1426,7 +2020,7 @@ function DashboardOperador() {
                           <div className="p-3 rounded bg-light border">
                             <div className="text-muted" style={{ fontSize: "12px" }}>Cliente Frecuente</div>
                             <div className="fs-5 fw-bold" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {historialClientes[0].nombre} {historialClientes[0].apellido}
+                              {historialClientes.length > 0 ? `${historialClientes[0].nombre} ${historialClientes[0].apellido}` : "Ninguno"}
                             </div>
                           </div>
                         </div>
@@ -1471,13 +2065,18 @@ function DashboardOperador() {
                   <h2 className="dashboard-card-title">Reporte de Calificaciones y Comentarios</h2>
                   <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                     <p className="text-muted mb-0">Resumen de la retroalimentación recibida por parte de tus clientes.</p>
-                    <button
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={cargarReporteCalificaciones}
-                      disabled={cargandoCalificaciones}
-                    >
-                      {cargandoCalificaciones ? "Actualizando..." : "Actualizar"}
-                    </button>
+                    <div className="d-flex gap-2">
+                      <button
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={cargarReporteCalificaciones}
+                        disabled={cargandoCalificaciones}
+                      >
+                        {cargandoCalificaciones ? "Actualizando..." : "Actualizar"}
+                      </button>
+                      <button className="btn btn-sm btn-outline-secondary" onClick={generarPDFCalificaciones}>
+                        Descargar .PDF de Calificaciones
+                      </button>
+                    </div>
                   </div>
                   
                   {errorCalificaciones && (
@@ -1584,29 +2183,7 @@ function DashboardOperador() {
         )}
 
         {vista === "cupones" && (
-          <div className="row">
-            <div className="col-md-6">
-              <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Crear Cupón de Descuento</h2>
-                <div className="mb-3">
-                  <label className="form-label">Código del Cupón</label>
-                  <input type="text" className="form-control" placeholder="Ej. VERANO2026" />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Tipo de Descuento</label>
-                  <select className="form-select">
-                    <option>Porcentaje</option>
-                    <option>Monto Fijo</option>
-                  </select>
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Valor del Descuento</label>
-                  <input type="number" className="form-control" />
-                </div>
-                <button className="btn btn-primary w-100">Generar y Enviar Cupón</button>
-              </div>
-            </div>
-          </div>
+          <CuponesOperador token={token} />
         )}
 
         {vista === "perfil" && (

@@ -55,5 +55,6 @@ router.get("/cupones/clientes", operadorCuponController.listarClientesElegibles)
 router.get("/cupones", operadorCuponController.listarCupones);
 router.post("/cupones", operadorCuponController.crearCupon);
 router.patch("/cupones/:id/desactivar", operadorCuponController.desactivarCupon);
+router.post("/cupones/:id/enviar", operadorCuponController.enviarCuponPorCorreo);
 
 module.exports = router;
