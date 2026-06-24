@@ -1,0 +1,368 @@
+const db = require("../config/db");
+const { enviarCorreo } = require("../utils/mailer");
+const fs = require("fs");
+const csv = require("csv-parser");
+
+// Registrar una ruta manualmente
+const registrarRutaManual = async (req, res) => {
+  // Extraemos el ID directamente del token validado por seguridad (req.usuario)
+  const empresa_id = req.usuario.id;
+  
+  const {
+    nombre_ruta,
+    origen,
+    destino,
+    tipo_servicio,
+    precio,
+    tiempo_estimado,
+    hora_salida,
+    hora_llegada_estimada,
+    dias_disponibles,
+    capacidad_pasajeros
+  } = req.body;
+
+  // Campos obligatorios: nombre_ruta, origen, destino, tipo_servicio, precio
+  if (!nombre_ruta || !origen || !destino || !tipo_servicio || precio === undefined) {
+    return res.status(400).json({
+      success: false,
+      message: "Faltan campos obligatorios (nombre_ruta, origen, destino, tipo_servicio, precio)."
+    });
+  }
+
+  try {
+    // Primero verificamos que la empresa de transporte exista
+    const empresaCheck = await db.pool.query(
+      "SELECT id FROM usuarios WHERE id = $1 AND rol = 'empresa_transporte'",
+      [empresa_id]
+    );
+
+    if (empresaCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "La empresa de transporte especificada no existe o no tiene permisos."
+      });
+    }
+
+    // Luego insertamos la nueva ruta en la base de datos
+    const insertQuery = `
+      INSERT INTO rutas_transporte (
+        empresa_id, nombre_ruta, origen, destino, tipo_servicio, 
+        precio, tiempo_estimado, hora_salida, hora_llegada_estimada, 
+        dias_disponibles, capacidad_pasajeros
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *;
+    `;
+
+    const valores = [
+      empresa_id,
+      nombre_ruta,
+      origen,
+      destino,
+      tipo_servicio,
+      precio,
+      tiempo_estimado || null,
+      hora_salida || null,
+      hora_llegada_estimada || null,
+      dias_disponibles || null,
+      capacidad_pasajeros || null
+    ];
+
+    const result = await db.pool.query(insertQuery, valores);
+
+    res.status(201).json({
+      success: true,
+      message: "Ruta registrada exitosamente.",
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Error al registrar ruta manual:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor al registrar la ruta."
+    });
+  }
+};
+
+// Editar una ruta existente
+const editarRuta = async (req, res) => {
+  const { id } = req.params; // El ID de la ruta viene en la URL
+  const empresa_id = req.usuario.id; // Extraemos el ID del token por seguridad
+
+  const {
+    nombre_ruta,
+    tipo_servicio,
+    precio,
+    tiempo_estimado,
+    hora_salida,
+    hora_llegada_estimada,
+    dias_disponibles,
+    capacidad_pasajeros
+  } = req.body;
+
+  try {
+    // Primero verificamos que la ruta exista y que pertenezca a la empresa que intenta editarla
+    const rutaCheck = await db.pool.query(
+      "SELECT id FROM rutas_transporte WHERE id = $1 AND empresa_id = $2",
+      [id, empresa_id]
+    );
+
+    if (rutaCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Ruta no encontrada o no tienes permisos para editarla."
+      });
+    }
+
+    // Actualizamos solo los campos que se proporcionen 
+    // (si no se proporciona un campo, se mantiene el valor actual) los campos origen y 
+    // destino no se pueden editar si ya hay reservas asociadas a la ruta
+
+    // Se usa COALESCE para mantener el valor actual si no se proporciona un nuevo valor 
+    // en la solicitud
+    const updateQuery = `
+      UPDATE rutas_transporte 
+      SET 
+        nombre_ruta = COALESCE($1, nombre_ruta),
+        tipo_servicio = COALESCE($2, tipo_servicio),
+        precio = COALESCE($3, precio),
+        tiempo_estimado = COALESCE($4, tiempo_estimado),
+        hora_salida = COALESCE($5, hora_salida),
+        hora_llegada_estimada = COALESCE($6, hora_llegada_estimada),
+        dias_disponibles = COALESCE($7, dias_disponibles),
+        capacidad_pasajeros = COALESCE($8, capacidad_pasajeros)
+      WHERE id = $9
+      RETURNING *;
+    `;
+
+    const valores = [
+      nombre_ruta, tipo_servicio, precio, tiempo_estimado, 
+      hora_salida, hora_llegada_estimada, dias_disponibles, 
+      capacidad_pasajeros, id
+    ];
+
+    const result = await db.pool.query(updateQuery, valores);
+
+    res.status(200).json({
+      success: true,
+      message: "Ruta actualizada exitosamente.",
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Error al editar ruta:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error interno al actualizar la ruta."
+    });
+  }
+};
+
+// Cambiar estado de una ruta (Cancelar, Suspender o Reactivar) y notificar
+const cambiarEstadoRuta = async (req, res) => {
+  const { id } = req.params; // ID de la ruta
+  const empresa_id = req.usuario.id; // Extraemos el ID del token por seguridad
+  
+  const { nuevo_estado, motivo_cancelacion } = req.body;
+
+  if (!nuevo_estado) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Falta el dato obligatorio: nuevo_estado." 
+    });
+  }
+
+  // Validar que el estado sea el correcto según tu base de datos
+  const estadosValidos = ['activa', 'suspendida', 'cancelada'];
+  if (!estadosValidos.includes(nuevo_estado)) {
+    return res.status(400).json({ success: false, message: "Estado no válido." });
+  }
+
+  const client = await db.pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // Primero verificamos que la ruta exista y que pertenezca a la empresa
+    const rutaCheck = await client.query(
+      "SELECT * FROM rutas_transporte WHERE id = $1 AND empresa_id = $2",
+      [id, empresa_id]
+    );
+
+    if (rutaCheck.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Ruta no encontrada o no pertenece a tu empresa." });
+    }
+
+    const rutaInfo = rutaCheck.rows[0];
+
+    // Actualizamos el estado de la ruta
+    await client.query(
+      "UPDATE rutas_transporte SET estado = $1, motivo_cancelacion = $2, updated_at = NOW() WHERE id = $3",
+      [nuevo_estado, motivo_cancelacion || null, id]
+    );
+
+    // NOTIFICACIÓN A CLIENTES
+    const estadosReserva = nuevo_estado === 'activa' 
+      ? "('pendiente_pago', 'confirmado', 'cancelado')" 
+      : "('pendiente_pago', 'confirmado')";
+
+    const clientesAfectados = await client.query(`
+      SELECT DISTINCT u.email, c.nombre
+      FROM reservaciones r
+      JOIN clientes c ON r.cliente_id = c.id
+      JOIN usuarios u ON c.id = u.id
+      WHERE r.ruta_transporte_id = $1 
+        AND r.estado IN ${estadosReserva}
+    `, [id]);
+
+    for (const row of clientesAfectados.rows) {
+      let asunto, titulo, mensaje;
+
+      if (nuevo_estado === 'activa') {
+        asunto = "¡Buenas noticias! Ruta Reactivada - TrackFlow-HUB";
+        titulo = "Ruta REACTIVADA";
+        mensaje = `Hola ${row.nombre}, te informamos que la ruta "${rutaInfo.nombre_ruta}" ha vuelto a operar con normalidad y se encuentra <b>ACTIVA</b> en nuestra plataforma.<br><br><b>Tu reservación y tu asiento han sido conservados y reactivados exitosamente.</b> ¡Te esperamos para tu viaje!`;
+      } else {
+        asunto = `Aviso Importante: Ruta ${nuevo_estado} - TrackFlow-HUB`;
+        titulo = `Ruta ${nuevo_estado.toUpperCase()}`;
+        mensaje = `Hola ${row.nombre}, te informamos por este medio que la ruta "${rutaInfo.nombre_ruta}" programada en nuestra plataforma ha sido ${nuevo_estado} por emergencias o condiciones climáticas.<br><br><b>Motivo de la empresa:</b> ${motivo_cancelacion || 'No especificado'}.<br><br>Por favor, revisa tu panel de usuario para más información.`;
+      }
+      
+      await enviarCorreo(row.email, asunto, titulo, mensaje, "");
+    }
+
+    // GESTIÓN DE LAS RESERVACIONES EN BASE DE DATOS
+    if (nuevo_estado === 'cancelada') {
+       // Si se cancela la ruta, cancelamos las reservas
+       await client.query(
+         "UPDATE reservaciones SET estado = 'cancelado', motivo_cancelacion = $1, updated_at = NOW() WHERE ruta_transporte_id = $2 AND estado IN ('pendiente_pago', 'confirmado')", 
+         [motivo_cancelacion, id]
+       );
+    } else if (nuevo_estado === 'activa') {
+       // Si se reactiva la ruta, devolvemos las reservas a su estado confirmado para no perder los asientos
+       await client.query(
+         "UPDATE reservaciones SET estado = 'confirmado', motivo_cancelacion = NULL, updated_at = NOW() WHERE ruta_transporte_id = $1 AND estado = 'cancelado'", 
+         [id]
+       );
+    }
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      success: true,
+      message: `La ruta ha sido ${nuevo_estado} exitosamente y se notificó a los clientes.`
+    });
+
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error al cambiar estado de ruta:", error);
+    res.status(500).json({ success: false, message: "Error interno del servidor." });
+  } finally {
+    client.release();
+  }
+};
+
+// Cargar rutas masivas desde un archivo CSV
+const cargarRutasCSV = async (req, res) => {
+  const empresa_id = req.usuario.id; // Extraemos el ID del token por seguridad
+  const archivo = req.file;
+
+  if (!archivo) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Se requiere un archivo CSV." 
+    });
+  }
+
+  const rutasAInsertar = [];
+
+  // Leemos y parseamos el archivo CSV usando un stream 
+  // para no cargar todo el archivo en memoria de una vez
+  fs.createReadStream(archivo.path)
+    .pipe(csv())
+    .on('data', (fila) => {
+      // El parseador convierte cada fila del CSV en un objeto JSON
+      rutasAInsertar.push(fila);
+    })
+    .on('end', async () => {
+      const client = await db.pool.connect();
+      
+      try {
+        await client.query("BEGIN");
+        let rutasInsertadas = 0;
+
+        // Iteramos sobre las rutas parseadas y las insertamos en la base de datos
+        for (const ruta of rutasAInsertar) {
+          // Validamos que la fila traiga lo mínimo necesario
+          if (ruta.nombre_ruta && ruta.origen && ruta.destino && ruta.tipo_servicio && ruta.precio) {
+            
+            const insertQuery = `
+              INSERT INTO rutas_transporte (
+                empresa_id, nombre_ruta, origen, destino, tipo_servicio, 
+                precio, tiempo_estimado, hora_salida, hora_llegada_estimada, 
+                dias_disponibles, capacidad_pasajeros
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            `;
+
+            const valores = [
+              empresa_id,
+              ruta.nombre_ruta,
+              ruta.origen,
+              ruta.destino,
+              ruta.tipo_servicio,
+              parseFloat(ruta.precio),
+              ruta.tiempo_estimado || null,
+              ruta.hora_salida || null,
+              ruta.hora_llegada_estimada || null,
+              ruta.dias_disponibles || null,
+              ruta.capacidad_pasajeros ? parseInt(ruta.capacidad_pasajeros) : null
+            ];
+
+            await client.query(insertQuery, valores);
+            rutasInsertadas++;
+          }
+        }
+
+        await client.query("COMMIT");
+
+        res.status(201).json({
+          success: true,
+          message: `Se procesó el archivo correctamente. ${rutasInsertadas} rutas insertadas.`
+        });
+
+      } catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error procesando CSV:", error);
+        res.status(500).json({ success: false, message: "Error interno al guardar las rutas." });
+      } finally {
+        // Eliminamos el archivo temporal después de procesarlo para liberar espacio en el servidor
+        fs.unlinkSync(archivo.path);
+        client.release();
+      }
+    });
+};
+
+const obtenerRutasEmpresa = async (req, res) => {
+  // Esta ruta se mantiene usando req.params porque es la ruta PÚBLICA que permite
+  // a los clientes consultar las rutas de cualquier empresa para comprar boletos.
+  const { empresa_id } = req.params;
+  try {
+    const { rows } = await require("../config/db").pool.query(
+      "SELECT * FROM rutas_transporte WHERE empresa_id = $1 ORDER BY id DESC",
+      [empresa_id]
+    );
+    res.status(200).json({ success: true, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error al obtener rutas." });
+  }
+};
+
+module.exports = {
+  registrarRutaManual,
+  editarRuta,
+  cambiarEstadoRuta,
+  cargarRutasCSV,
+  obtenerRutasEmpresa
+};
