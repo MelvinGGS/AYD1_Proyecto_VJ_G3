@@ -2143,42 +2143,7 @@ function DashboardOperador() {
 
             </div>
 
-            {/* TARJETAS INFERIORES ESTÁTICAS DE REPORTES */}
-            <div className="col-md-6">
-              <div className="dashboard-card-custom">
-                <h2 className="dashboard-card-title">Reportar Cliente</h2>
-                <p className="text-muted">Reporta conductas inapropiadas o información falsa de recolección/destino.</p>
-                <div className="mb-3">
-                  <label className="form-label">Cliente</label>
-                  <input type="text" className="form-control" placeholder="Ej. Juan Pérez" />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Motivo</label>
-                  <input type="text" className="form-control" placeholder="Ej. Daño intencional, dirección falsa" />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Descripción de hechos</label>
-                  <textarea className="form-control" rows="3"></textarea>
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Evidencia de soporte (Fotos/Videos)</label>
-                  <input type="file" className="form-control" />
-                </div>
-                <button className="btn btn-danger w-100">Enviar Reporte</button>
-              </div>
-            </div>
-            <div className="col-md-6">
-              <div className="dashboard-card-custom h-100">
-                <h2 className="dashboard-card-title">Reportes recibidos de clientes</h2>
-                <div className="list-group">
-                  <div className="list-group-item p-3 mb-2 border rounded bg-light">
-                    <h6 className="fw-bold">No se recolectó a tiempo</h6>
-                    <p className="mb-1 text-muted">Estado del reporte: Enviado (en espera de revisión del admin).</p>
-                    <small>Cliente: Juan Pérez</small>
-                  </div>
-                </div>
-              </div>
-            </div>
+
           </div>
         )}
 
