@@ -1,9 +1,9 @@
-jest.mock('../../backend/config/db', () => ({
+jest.mock('../config/db', () => ({
   pool: { query: jest.fn() }
 }));
 
-const { listarCalificaciones } = require('../../backend/controllers/operadorCalificacionController');
-const db = require('../../backend/config/db');
+const { listarCalificaciones } = require('../controllers/operadorCalificacionController');
+const db = require('../config/db');
 
 describe('202307378 - operadorCalificacionController - listarCalificaciones', () => {
   let req, res;

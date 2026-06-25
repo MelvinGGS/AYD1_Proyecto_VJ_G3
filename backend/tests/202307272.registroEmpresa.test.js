@@ -1,12 +1,12 @@
-jest.mock('../../backend/config/db', () => ({
+jest.mock('../config/db', () => ({
   pool: { connect: jest.fn() }
 }));
-jest.mock('../../backend/utils/mailer', () => ({
+jest.mock('../utils/mailer', () => ({
   enviarCorreo: jest.fn()
 }));
 
-const { registrarEmpresa } = require('../../backend/controllers/registroEmpresaController');
-const db = require('../../backend/config/db');
+const { registrarEmpresa } = require('../controllers/registroEmpresaController');
+const db = require('../config/db');
 
 describe('202307272 - registroEmpresaController - registrarEmpresa', () => {
   let req, res, mockClient;
