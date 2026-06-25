@@ -8,6 +8,8 @@ const adminRoutes = require("./routes/adminRoutes");
 const operadorRoutes = require("./routes/operadorRoutes");
 const rutaRoutes = require('./routes/rutaRoutes');
 const empresaRoutes = require('./routes/empresaRoutes');
+const carritoRoutes = require('./routes/carritoRoutes');
+const pagoRoutes = require('./routes/pagoRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
