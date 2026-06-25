@@ -1,0 +1,59 @@
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: trackflow-db
+    environment:
+      POSTGRES_DB: trackflow_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: Admin123
+      ADMIN_EMAIL: eventcoreg3@gmail.com
+      ADMIN_PASSWORD_HASH: "$2b$10$.gM0la4kenhifkX8/3WcjuGe0A98Z65RRbHv0xaFu5tS4PRXVeoJm"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/02-init-admin.sh:/docker-entrypoint-initdb.d/02-init-admin.sh
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trackflow-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DB_HOST=postgres-db
+      - DB_PORT=5432
+      - DB_USER=admin
+      - DB_PASSWORD=Admin123
+      - DB_NAME=trackflow_db
+      - EMAIL_USER=eventcoreg3@gmail.com
+      - EMAIL_PASS=qfrsqkumjhfkhvoh
+      - JWT_SECRET=trackflow_secret_2026
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - postgres-db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: trackflow-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    driver: local
