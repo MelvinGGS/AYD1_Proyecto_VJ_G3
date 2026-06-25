@@ -31,6 +31,9 @@ app.use('/api/rutas', rutaRoutes);
 // para las rutas de empresa
 app.use('/api/empresa', empresaRoutes);
 
+// Ruta para carrito de compras
+app.use('/api/carrito', carritoRoutes);
+
 // Ruta de estado base del servidor (Health Check)
 app.get("/", (req, res) => {
   res.json({
