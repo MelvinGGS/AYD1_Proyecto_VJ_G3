@@ -147,8 +147,110 @@ const procesarPago = async (req, res) => {
     }
 };
 
+// Cancelar reservación y aplicar mecanismo de reembolso
+const cancelarReservacion = async (req, res) => {
+    const clienteId = req.usuario.id;
+    const { reservacion_id } = req.params;
+
+    const client = await db.pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        // 1. Obtener la reserva y validar que exista
+        const reservaRes = await client.query(
+            "SELECT * FROM reservaciones WHERE id = $1 AND cliente_id = $2",
+            [reservacion_id, clienteId]
+        );
+
+        if (reservaRes.rows.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ success: false, message: "Reservación no encontrada." });
+        }
+
+        const reserva = reservaRes.rows[0];
+
+        if (reserva.estado === 'cancelado' || reserva.estado === 'reembolsado') {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ success: false, message: "La reservación ya fue cancelada o reembolsada anteriormente." });
+        }
+
+        // 2. Mecanismo de validación: 24 horas de anticipación
+        const fechaServicio = new Date(reserva.fecha_inicio);
+        const ahora = new Date();
+        const diferenciaHoras = (fechaServicio - ahora) / (1000 * 60 * 60);
+
+        if (diferenciaHoras < 24) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ 
+                success: false, 
+                message: "Política de cancelación: Solo se permite cancelar con al menos 24 horas de anticipación a la fecha del servicio." 
+            });
+        }
+
+        // 3. Actualizar el estado de la reservación a 'cancelado'
+        await client.query(
+            "UPDATE reservaciones SET estado = 'cancelado', fecha_cancelacion = NOW(), motivo_cancelacion = 'Cancelación voluntaria del cliente' WHERE id = $1",
+            [reservacion_id]
+        );
+
+        // 4. Buscar el pago original para ejecutar el reembolso
+        const pagoRes = await client.query(
+            "SELECT * FROM pagos WHERE reservacion_id = $1 AND estado = 'completado'",
+            [reservacion_id]
+        );
+
+        if (pagoRes.rows.length > 0) {
+            const pago = pagoRes.rows[0];
+
+            // A. Devolver el dinero al saldo de la tarjeta/wallet
+            await client.query(
+                "UPDATE metodos_pago SET saldo = saldo + $1 WHERE id = $2",
+                [pago.monto, pago.metodo_pago_id]
+            );
+
+            // B. Actualizar el estado del pago a 'reembolsado'
+            await client.query(
+                "UPDATE pagos SET estado = 'reembolsado', monto_reembolso = $1, fecha_reembolso = NOW() WHERE id = $2",
+                [pago.monto, pago.id]
+            );
+        }
+
+        await client.query("COMMIT");
+        res.status(200).json({ success: true, message: "Reservación cancelada y dinero reembolsado exitosamente a tu método de pago." });
+
+    } catch (error) {
+        await client.query("ROLLBACK");
+        console.error("Error al cancelar reservación:", error);
+        res.status(500).json({ success: false, message: "Error interno al procesar el reembolso." });
+    } finally {
+        client.release();
+    }
+};
+
+const obtenerMisReservaciones = async (req, res) => {
+    const clienteId = req.usuario.id;
+    try {
+        const { rows } = await db.pool.query(`
+            SELECT 
+                r.id, r.estado, r.fecha_inicio, r.precio_total, r.tipo_servicio,
+                rt.nombre_ruta AS nombre_transporte,
+                se.nombre_servicio AS nombre_envio
+            FROM reservaciones r
+            LEFT JOIN rutas_transporte rt ON r.ruta_transporte_id = rt.id
+            LEFT JOIN servicios_envio se ON r.servicio_envio_id = se.id
+            WHERE r.cliente_id = $1
+            ORDER BY r.created_at DESC
+        `, [clienteId]);
+        res.status(200).json({ success: true, data: rows });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error al obtener reservaciones." });
+    }
+};
+
 module.exports = {
     obtenerMetodosPago,
     agregarMetodoPago,
-    procesarPago
+    procesarPago,
+    cancelarReservacion,
+    obtenerMisReservaciones
 };
