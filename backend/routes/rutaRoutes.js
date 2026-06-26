@@ -19,4 +19,7 @@ router.post("/csv", verificarAutenticado, uploadCsv.single("archivo_csv"), rutaC
 // Ruta para obtener las rutas de una empresa
 router.get("/empresa/:empresa_id", rutaController.obtenerRutasEmpresa);
 
+// Ruta para obtener rutas activas
+router.get("/activas", rutaController.obtenerRutasActivas);
+
 module.exports = router;

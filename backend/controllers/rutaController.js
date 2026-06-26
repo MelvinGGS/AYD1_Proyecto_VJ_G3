@@ -359,10 +359,22 @@ const obtenerRutasEmpresa = async (req, res) => {
   }
 };
 
+const obtenerRutasActivas = async (req, res) => {
+  try {
+    const { rows } = await require("../config/db").pool.query(
+      "SELECT * FROM rutas_transporte WHERE estado = 'activa' ORDER BY created_at DESC"
+    );
+    res.status(200).json({ success: true, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error al obtener el catálogo de rutas." });
+  }
+};
+
 module.exports = {
   registrarRutaManual,
   editarRuta,
   cambiarEstadoRuta,
   cargarRutasCSV,
-  obtenerRutasEmpresa
+  obtenerRutasEmpresa,
+  obtenerRutasActivas
 };
