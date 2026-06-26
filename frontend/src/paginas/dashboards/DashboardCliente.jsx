@@ -9,6 +9,9 @@ function DashboardCliente() {
   const [metodosPago, setMetodosPago] = useState([]);
   const [metodoSeleccionado, setMetodoSeleccionado] = useState("");
   const [cargando, setCargando] = useState(false);
+  
+  // ESTADO PARA EL CATÁLOGO DE RUTAS
+  const [rutasDisponibles, setRutasDisponibles] = useState([]);
 
   const [formTarjeta, setFormTarjeta] = useState({
     numero_tarjeta: "", nombre_tarjeta: "", fecha_vencimiento: "", cvv: ""
@@ -18,9 +21,21 @@ function DashboardCliente() {
   useEffect(() => {
     cargarCarrito();
     cargarMetodosPago();
+    cargarRutasDisponibles();
   }, []);
 
   const getToken = () => localStorage.getItem("token");
+
+  // --- CARGAR CATÁLOGO ---
+  const cargarRutasDisponibles = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/rutas/activas");
+      const data = await res.json();
+      if (data.success) setRutasDisponibles(data.data);
+    } catch (error) {
+      console.error("Error al cargar el catálogo de rutas", error);
+    }
+  };
 
   const cargarCarrito = async () => {
     try {
@@ -71,42 +86,36 @@ function DashboardCliente() {
   // --- APIS DEL CARRITO ---
 
   const agregarAlCarrito = async (servicioId, tipoServicio, servicioData) => {
-  setCargando(true);
-  try {
-    const res = await fetch("http://localhost:3000/api/carrito", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${getToken()}`
-      },
-      body: JSON.stringify({ 
-        servicio_id: servicioId, 
-        tipo_servicio: tipoServicio,
-        fecha_inicio: servicioData.fecha_inicio,
-        precio_unitario: servicioData.precio_unitario
-      })
-    });
-    const data = await res.json();
-    
-    if (data.success) {
-      // Agregar el item con los datos que tienes en servicioData
-      const itemCompleto = {
-        ...data.data,
-        ...servicioData // Mezclar con los datos que ya tienes
-      };
-      setCarrito([...carrito, itemCompleto]);
-      setTotalCarrito(totalCarrito + parseFloat(data.data.subtotal));
-      alert("Servicio agregado al carrito");
-    } else {
-      alert(data.message || "Error al agregar al carrito");
+    setCargando(true);
+    try {
+      const res = await fetch("http://localhost:3000/api/carrito", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({ 
+          servicio_id: servicioId, 
+          tipo_servicio: tipoServicio,
+          fecha_inicio: servicioData.fecha_inicio,
+          precio_unitario: servicioData.precio_unitario
+        })
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        cargarCarrito(); // Recargamos directamente desde la BD para mantener consistencia
+        alert("Servicio agregado al carrito");
+      } else {
+        alert(data.message || "Error al agregar al carrito");
+      }
+    } catch (error) { 
+      alert("Error al agregar al carrito");
+      console.error(error);
+    } finally {
+      setCargando(false);
     }
-  } catch (error) { 
-    alert("Error al agregar al carrito");
-    console.error(error);
-  } finally {
-    setCargando(false);
-  }
-};
+  };
 
   const eliminarDelCarrito = async (carritoId) => {
     if (!window.confirm("¿Eliminar este item del carrito?")) return;
@@ -254,6 +263,51 @@ function DashboardCliente() {
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
         <h1>Panel de Cliente</h1>
         <button onClick={cerrarSesion} style={{ padding: "10px", backgroundColor: "#EF4444", color: "white", border: "none", borderRadius: "5px", cursor: "pointer" }}>Cerrar sesión</button>
+      </div>
+
+      {/* --- SECCIÓN NUEVA: CATÁLOGO DE RUTAS --- */}
+      <div style={{ backgroundColor: "white", padding: "20px", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", marginBottom: "20px" }}>
+        <h2>Catálogo de Rutas de Transporte</h2>
+        <p style={{ color: "#64748B", marginBottom: "15px" }}>Selecciona una fecha y agrega el viaje a tu carrito.</p>
+        
+        {rutasDisponibles.length === 0 ? (
+          <p>No hay rutas disponibles en este momento.</p>
+        ) : (
+          <div style={{ display: "flex", gap: "15px", flexWrap: "wrap" }}>
+            {rutasDisponibles.map(ruta => (
+              <div key={ruta.id} style={{ border: "1px solid #E2E8F0", padding: "15px", borderRadius: "8px", width: "280px" }}>
+                <h4 style={{ margin: "0 0 10px 0", color: "#0F172A" }}>{ruta.nombre_ruta}</h4>
+                <p style={{ margin: "5px 0", fontSize: "14px" }}><strong>Origen:</strong> {ruta.origen}</p>
+                <p style={{ margin: "5px 0", fontSize: "14px" }}><strong>Destino:</strong> {ruta.destino}</p>
+                <p style={{ margin: "5px 0", fontSize: "14px", color: "#10B981", fontWeight: "bold" }}>Precio: Q{ruta.precio}</p>
+                
+                <div style={{ marginTop: "15px" }}>
+                  <label style={{ fontSize: "12px", color: "#64748B" }}>Fecha de viaje:</label>
+                  <input 
+                    type="date" 
+                    id={`fecha-ruta-${ruta.id}`} 
+                    style={{ width: "100%", padding: "8px", marginBottom: "10px", borderRadius: "5px", border: "1px solid #CBD5E1" }}
+                  />
+                  <button 
+                    onClick={() => {
+                      const fechaInput = document.getElementById(`fecha-ruta-${ruta.id}`).value;
+                      if (!fechaInput) return alert("Debes seleccionar una fecha para el viaje.");
+                      
+                      agregarAlCarrito(ruta.id, "transporte", {
+                        fecha_inicio: fechaInput,
+                        precio_unitario: ruta.precio
+                      });
+                    }}
+                    disabled={cargando}
+                    style={{ width: "100%", padding: "8px", backgroundColor: "#0F172A", color: "white", border: "none", borderRadius: "5px", cursor: cargando ? "not-allowed" : "pointer" }}
+                  >
+                    Agregar al Carrito
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
