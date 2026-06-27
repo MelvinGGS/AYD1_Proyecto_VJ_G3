@@ -336,11 +336,21 @@ function DashboardCliente() {
     } catch { console.error("Error al cargar perfil"); }
   };
 
-  const guardarPerfil = async () => {
+  const guardarPerfil = () => {
     if (!formPerfil.nombre || !formPerfil.apellido || !formPerfil.telefono) {
       mostrarAlerta("warning", "Nombre, apellido y teléfono son requeridos.");
       return;
     }
+    setModal({
+      titulo: "Confirmar cambios de perfil",
+      descripcion: "¿Estas seguro que deseas guardar los cambios en tu perfil?",
+      tipo: "primario",
+      onConfirmar: () => ejecutarGuardarPerfil()
+    });
+  };
+
+  const ejecutarGuardarPerfil = async () => {
+    setModal(null);
     setCargando(true);
     try {
       const res = await fetch("http://localhost:3000/api/cliente/perfil", {
@@ -359,7 +369,6 @@ function DashboardCliente() {
     } catch { mostrarAlerta("error", "Error al guardar perfil."); }
     finally { setCargando(false); }
   };
-
   const getBadgeClass = (estado) => {
     const clases = { confirmado: "badge-confirmado", cancelado: "badge-cancelado", pendiente_pago: "badge-pendiente", en_transito: "badge-en_transito", entregado: "badge-entregado" };
     return `badge-estado ${clases[estado] || "badge-pendiente"}`;
