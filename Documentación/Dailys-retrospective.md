@@ -17,6 +17,8 @@ Trabajará primero en la documentación del proyecto y en los prototipos de inte
 ### Integrante 5: Melvin Geovanni García Sumalá - 202300712
 Empezará con la estructura de la base de datos y los registros de usuario, asegurando que cada tipo de cuenta tenga sus campos correctos.
 
+![Sprint Planning 1](sprint%20planning%201.jpeg)
+
 ---
 
 # Daily Scrum — Sprint 1 — Día 1
@@ -193,3 +195,208 @@ Fecha: 16 Junio 2026
 | Qué hice bien | Organicé el tablero Kanban con las columnas y tarjetas necesarias para dar seguimiento al sprint. |
 | Qué hice mal | Algunas tarjetas no fueron lo bastante específicas y eso generó confusión sobre el alcance. |
 | Qué mejorar | Resolver dudas sobre el enunciado al inicio del sprint para evitar reinterpretaciones durante la implementación. |
+
+![Retrospective 1](retrospective1.jpeg)
+
+---
+---
+---
+# Sprint Planning 2
+
+Se organizo el trabajo del segundo sprint enfocado en los modulos de operador logistico, empresa de transporte, reportes y pruebas. Cada integrante tomara responsabilidad sobre una parte concreta del sistema para avanzar en paralelo y entregar todas las funcionalidades a tiempo.
+
+### Integrante 1: Maria Fernanda Morales Lima - 202300378
+Se encargara del modulo de empresa de transporte, incluyendo la gestion de cupones, solicitudes de cambio de perfil, reportes de empresa y la carga de flota/rutas por CSV.
+
+### Integrante 2: Josue David Figueroa Acosta - 202307378
+Trabajara en el modulo de operador logistico, implementando la vista de calificaciones con respuesta a comentarios, el calendario de envios programados y la generacion de cupones.
+
+### Integrante 3: Bryan Alejandro Anona Paredes - 202307272
+Implementara las funcionalidades de rutas para la empresa de transporte, incluyendo registro manual, edicion individual, cancelacion/suspension, carga masiva por CSV y la reactivacion de rutas.
+
+### Integrante 4: Susana Paola Gonzalez Contreras - 202000576
+Se encargara de los reportes del operador, incluyendo el reporte de ganancias en PDF, historial de clientes y calificaciones/comentarios recibidos.
+
+### Integrante 5: Melvin Geovanni Garcia Sumala - 202300712
+Trabajara en el modulo de operador logistico desde el backend y frontend, cubriendo el registro, edicion, eliminacion y suspension de servicios, ademas de la actualizacion de perfil.
+
+![Sprint Planning 2](sprint%20planning%202.jpeg)
+
+---
+
+# Daily Scrum — Sprint 2 — Dia 1
+
+Fecha: 19 Junio 2026
+
+### Integrante 1: Maria Fernanda Morales Lima - 202300378
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Corregi el sistema de autenticacion JWT en el login para que los tokens se reemplacen correctamente al iniciar sesion en diferentes cuentas. |
+| **Que hare hoy?** | Implementare la gestion de cupones y el perfil con solicitudes de cambio para el modulo de empresa. |
+| **Impedimentos?** | Tuve que resolver primero un conflicto con la rama develop antes de poder subir mis cambios del JWT. |
+
+### Integrante 2: Josue David Figueroa Acosta - 202307378
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Revise los requerimientos del modulo de operador para planificar las vistas de calificaciones y calendario. |
+| **Que hare hoy?** | Comenzare con la implementacion de la visualizacion de calificaciones y la funcionalidad de responder comentarios. |
+| **Impedimentos?** | Ninguno por el momento, ya tengo claro el alcance de mis tareas. |
+
+### Integrante 3: Bryan Alejandro Anona Paredes - 202307272
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Implemente las APIs de registro manual de rutas, edicion individual y cancelacion/suspension de rutas para la empresa de transporte. |
+| **Que hare hoy?** | Terminare la API de carga masiva CSV, el endpoint para obtener rutas y la correccion de seguridad JWT en las rutas. |
+| **Impedimentos?** | Tuve que corregir un problema de seguridad porque las rutas de la API no estaban validando el token JWT correctamente. |
+
+### Integrante 4: Susana Paola Gonzalez Contreras - 202000576
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Revise la estructura actual del dashboard de operador para entender donde integrar los reportes que me corresponden. |
+| **Que hare hoy?** | Comenzare con el reporte de ganancias en PDF para el operador logistico. |
+| **Impedimentos?** | Es la primera vez que trabajo con generacion de PDFs en el backend y estoy investigando la libreria adecuada. |
+
+### Integrante 5: Melvin Geovanni Garcia Sumala - 202300712
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Levante el frontend del modulo de operador y deje funcionando el registro de servicios con zona, capacidad, precio y fotos. |
+| **Que hare hoy?** | Implementare la edicion y eliminacion de servicios del operador para completar el CRUD basico. |
+| **Impedimentos?** | Tuve problemas de merge con develop porque Bryan y Maria tambien estaban subiendo cambios al mismo tiempo. |
+
+---
+
+# Daily Scrum — Sprint 2 — Dia 2
+
+Fecha: 20 Junio 2026
+
+### Integrante 1: Maria Fernanda Morales Lima - 202300378
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Termine la gestion de cupones para empresa, las solicitudes de cambio de perfil y el envio de cupones por correo a los clientes. |
+| **Que hare hoy?** | Implementare los reportes del modulo empresa, la flota de vehiculos con CSV y el resumen del dashboard de empresa. |
+| **Impedimentos?** | Tuve que corregir un query de estado de rutas que no filtraba correctamente los datos para los reportes. |
+
+### Integrante 2: Josue David Figueroa Acosta - 202307378
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Avance con la logica de calificaciones del operador, preparando los endpoints y la conexion con el frontend. |
+| **Que hare hoy?** | Terminare la visualizacion de calificaciones con la opcion de responder comentarios y comenzare la vista de calendario. |
+| **Impedimentos?** | Ninguno, las APIs del backend estan respondiendo correctamente. |
+
+### Integrante 3: Bryan Alejandro Anona Paredes - 202307272
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Termine la carga masiva CSV, el frontend de rutas para empresa y la correccion de seguridad JWT en todas las APIs de rutas. |
+| **Que hare hoy?** | Implementare la reactivacion de rutas y el envio de correos de aprobacion/rechazo para los cambios de perfil. |
+| **Impedimentos?** | Ninguno, el modulo de rutas esta casi completo. |
+
+### Integrante 4: Susana Paola Gonzalez Contreras - 202000576
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Avance con la investigacion de la libreria para PDFs y empece a estructurar el reporte de ganancias. |
+| **Que hare hoy?** | Continuare con la implementacion del reporte de ganancias en PDF y comenzare el reporte de historial de clientes. |
+| **Impedimentos?** | Me costo conectar la generacion del PDF con los datos reales de la base de datos, pero ya lo resolvi. |
+
+### Integrante 5: Melvin Geovanni Garcia Sumala - 202300712
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Termine la edicion y eliminacion de servicios del operador logistico. |
+| **Que hare hoy?** | Implementare la suspension y activacion temporal de servicios y la funcionalidad de actualizar perfil del operador. |
+| **Impedimentos?** | Tuve que resolver un merge con develop antes de poder subir mis cambios, lo que me atraso un poco. |
+
+---
+
+# Daily Scrum — Sprint 2 — Dia 3
+
+Fecha: 22 Junio 2026
+
+### Integrante 1: Maria Fernanda Morales Lima - 202300378
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Termine todos los reportes del modulo empresa, la flota con CSV y el resumen del dashboard. El modulo de empresa esta completo. |
+| **Que hare hoy?** | Preparare las pruebas unitarias y E2E del modulo de empresa para la entrega. |
+| **Impedimentos?** | Ninguno, todo el modulo esta funcionando correctamente. |
+
+### Integrante 2: Josue David Figueroa Acosta - 202307378
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Termine la vista de calificaciones con respuesta a comentarios, el calendario de envios y la generacion de cupones del operador. |
+| **Que hare hoy?** | Revisare el flujo completo del operador y preparare las pruebas unitarias y E2E correspondientes. |
+| **Impedimentos?** | Ninguno, logre terminar todas mis tareas del modulo de operador. |
+
+### Integrante 3: Bryan Alejandro Anona Paredes - 202307272
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Termine la reactivacion de rutas y el sistema de correos para aprobacion y rechazo de cambios de perfil. |
+| **Que hare hoy?** | Revisare que todas las funcionalidades de rutas esten integradas correctamente y preparare mis pruebas. |
+| **Impedimentos?** | Ninguno, el modulo de rutas de empresa esta completo. |
+
+### Integrante 4: Susana Paola Gonzalez Contreras - 202000576
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Termine el reporte de ganancias en PDF, el historial de clientes y el reporte de calificaciones y comentarios recibidos. |
+| **Que hare hoy?** | Preparare las pruebas unitarias y E2E de mis reportes para la entrega del sprint. |
+| **Impedimentos?** | Ninguno, los tres reportes estan funcionando y generando los PDFs correctamente. |
+
+### Integrante 5: Melvin Geovanni Garcia Sumala - 202300712
+| Pregunta | Respuesta |
+| --- | --- |
+| **Que hice ayer?** | Corregi detalles en la creacion de cupones y en la generacion de reportes en PDF que tenian problemas menores. |
+| **Que hare hoy?** | Terminare las correcciones pendientes y preparare las pruebas unitarias y E2E del modulo de operador. |
+| **Impedimentos?** | Encontre bugs en los cupones y los reportes PDF que me tomaron tiempo extra resolver, pero ya estan corregidos. |
+
+---
+
+# Sprint Retrospective 2
+
+## Maria Fernanda Morales Lima
+**Carnet:** 202300378
+**Responsabilidad:** Modulo de empresa de transporte
+
+| Aspecto | Resumen |
+| --- | --- |
+| Que hice bien | Implemente todo el modulo de empresa incluyendo cupones, solicitudes de perfil, reportes, flota CSV y el dashboard, logrando entregar antes de la fecha limite. |
+| Que hice mal | Perdi tiempo corrigiendo un query de estado de rutas que no filtraba bien y un conflicto con el JWT que debio resolverse antes. |
+| Que mejorar | Validar los queries con datos reales desde el inicio y coordinar mejor los cambios en archivos compartidos como el login. |
+
+## Bryan Alejandro Anona Paredes
+**Carnet:** 202307272
+**Responsabilidad:** Rutas de empresa de transporte y correos
+
+| Aspecto | Resumen |
+| --- | --- |
+| Que hice bien | Termine todas las APIs de rutas incluyendo registro manual, edicion, cancelacion, CSV, reactivacion y el frontend de empresa. |
+| Que hice mal | Las APIs de rutas no validaban el JWT correctamente al inicio, lo que genero un problema de seguridad que tuve que corregir. |
+| Que mejorar | Implementar la seguridad JWT desde el primer endpoint para no tener que regresar a corregir todas las rutas despues. |
+
+## Josue David Figueroa Acosta
+**Carnet:** 202307378
+**Responsabilidad:** Modulo de operador logistico
+
+| Aspecto | Resumen |
+| --- | --- |
+| Que hice bien | Implemente las calificaciones con respuesta a comentarios, el calendario de envios y los cupones del operador sin contratiempos. |
+| Que hice mal | Empece un poco tarde mis tareas comparado con el resto del equipo porque estuve revisando requerimientos mas tiempo del necesario. |
+| Que mejorar | Comenzar a codificar mas rapido una vez tenga claros los requerimientos y no sobreanalizar el alcance. |
+
+## Susana Paola Gonzalez Contreras
+**Carnet:** 202000576
+**Responsabilidad:** Reportes del operador logistico
+
+| Aspecto | Resumen |
+| --- | --- |
+| Que hice bien | Entregue los tres reportes del operador funcionando con generacion de PDF, ganancias, historial de clientes y calificaciones. |
+| Que hice mal | Me costo la generacion de PDFs porque no tenia experiencia previa y la conexion con datos reales de la base de datos. |
+| Que mejorar | Investigar las herramientas tecnicas antes de que inicie el sprint para no perder tiempo durante la implementacion. |
+
+## Melvin Geovanni Garcia Sumala
+**Carnet:** 202300712
+**Responsabilidad:** Modulo de operador y coordinacion general
+
+| Aspecto | Resumen |
+| --- | --- |
+| Que hice bien | Implemente el CRUD completo de servicios del operador, la actualizacion de perfil y apoye en la correccion de cupones y reportes PDF. |
+| Que hice mal | Los merges con develop me generaron conflictos frecuentes porque varios integrantes trabajabamos en ramas paralelas al mismo tiempo. |
+| Que mejorar | Hacer pulls de develop con mas frecuencia para reducir la cantidad de conflictos al momento de hacer merge. |
+
+![Sprint Retrospective 2](sprint%20retrospective%202.jpg)

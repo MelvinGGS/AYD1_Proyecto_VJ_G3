@@ -1,9 +1,9 @@
-jest.mock('../../backend/config/db', () => ({
+jest.mock('../config/db', () => ({
   pool: { query: jest.fn() }
 }));
 
-const { obtenerCalendario } = require('../../backend/controllers/operadorCalendarioController');
-const db = require('../../backend/config/db');
+const { obtenerCalendario } = require('../controllers/operadorCalendarioController');
+const db = require('../config/db');
 
 describe('202000576 - operadorCalendarioController - obtenerCalendario', () => {
   let req, res;

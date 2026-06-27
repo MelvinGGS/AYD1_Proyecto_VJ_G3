@@ -1,9 +1,9 @@
-jest.mock('../../backend/config/db', () => ({
+jest.mock('../config/db', () => ({
   pool: { query: jest.fn() }
 }));
 
-const { registrarRutaManual } = require('../../backend/controllers/rutaController');
-const db = require('../../backend/config/db');
+const { registrarRutaManual } = require('../controllers/rutaController');
+const db = require('../config/db');
 
 describe('202307272 - rutaController - registrarRutaManual', () => {
   let req, res;
