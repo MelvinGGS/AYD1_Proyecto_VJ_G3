@@ -12,6 +12,38 @@ import logoutIcon from "../../assets/iconos/logout.png";
 import historialIcon from "../../assets/iconos/historial.png";
 import cuponesIcon from "../../assets/iconos/cupones.png";
 
+function RutaCard({ ruta, onAgregar, cargando }) {
+  const [fecha, setFecha] = useState("");
+  return (
+    <div className="ruta-card">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "12px" }}>
+        <h4 style={{ fontWeight: "700", color: "var(--color-secundario)", margin: 0 }}>{ruta.nombre_ruta}</h4>
+        <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--color-primario)" }}>Q{ruta.precio}</span>
+      </div>
+      <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "4px" }}> {ruta.origen}  {ruta.destino}</p>
+      {ruta.tiempo_estimado && <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "12px" }}> {ruta.tiempo_estimado}</p>}
+      <div className="form-grupo">
+        <label className="form-label-cliente">Fecha de viaje</label>
+        <input
+          type="date"
+          className="form-input-cliente"
+          value={fecha}
+          onChange={e => setFecha(e.target.value)}
+          min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+        />
+      </div>
+      <button
+        className="btn-primario"
+        style={{ width: "100%" }}
+        onClick={() => onAgregar(ruta.id, ruta, fecha)}
+        disabled={cargando}
+      >
+        Agregar al Carrito
+      </button>
+    </div>
+  );
+}
+
 function DashboardCliente() {
   const navigate = useNavigate();
   const [vista, setVista] = useState("inicio");
@@ -349,9 +381,9 @@ function DashboardCliente() {
       {alerta && (
         <div style={{ position: "fixed", top: "80px", right: "24px", zIndex: 9997, minWidth: "300px" }}>
           <div className={`cliente-alert ${alerta.tipo}`}>
-            {alerta.tipo === "success" && "✓ "}
-            {alerta.tipo === "error" && "✕ "}
-            {alerta.tipo === "warning" && "⚠ "}
+            {alerta.tipo === "success" && ""}
+            {alerta.tipo === "error" && "x"}
+            {alerta.tipo === "warning" && ""}
             {alerta.tipo === "info" && "ℹ "}
             {alerta.mensaje}
           </div>
@@ -422,37 +454,14 @@ function DashboardCliente() {
                 </div>
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "16px" }}>
-                  {rutasDisponibles.map(ruta => {
-                    const [fecha, setFecha] = useState("");
-                    return (
-                      <div key={ruta.id} className="ruta-card">
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "12px" }}>
-                          <h4 style={{ fontWeight: "700", color: "var(--color-secundario)", margin: 0 }}>{ruta.nombre_ruta}</h4>
-                          <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--color-primario)" }}>Q{ruta.precio}</span>
-                        </div>
-                        <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "4px" }}>📍 {ruta.origen} → {ruta.destino}</p>
-                        {ruta.tiempo_estimado && <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "12px" }}>⏱ {ruta.tiempo_estimado}</p>}
-                        <div className="form-grupo">
-                          <label className="form-label-cliente">Fecha de viaje</label>
-                          <input
-                            type="date"
-                            className="form-input-cliente"
-                            value={fecha}
-                            onChange={e => setFecha(e.target.value)}
-                            min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
-                          />
-                        </div>
-                        <button
-                          className="btn-primario"
-                          style={{ width: "100%" }}
-                          onClick={() => agregarAlCarrito(ruta.id, ruta, fecha)}
-                          disabled={cargando}
-                        >
-                          Agregar al Carrito
-                        </button>
-                      </div>
-                    );
-                  })}
+                  {rutasDisponibles.map(ruta => (
+                    <RutaCard
+                      key={ruta.id}
+                      ruta={ruta}
+                      onAgregar={agregarAlCarrito}
+                      cargando={cargando}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -579,7 +588,7 @@ function DashboardCliente() {
                   <div key={m.id} style={{ padding: "14px", marginBottom: "10px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)", border: "1px solid #E2E8F0" }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ fontWeight: "700", color: "var(--color-secundario)" }}>
-                        {m.tipo === 'tarjeta' ? '💳 Tarjeta' : '👛 Wallet'}
+                        {m.tipo === 'tarjeta' ? ' Tarjeta' : ' Wallet'}
                       </span>
                       <span style={{ fontWeight: "700", color: "var(--color-primario)" }}>Q{m.saldo}</span>
                     </div>
@@ -600,7 +609,7 @@ function DashboardCliente() {
                     <input type="text" className={`form-input-cliente ${erroresTarjeta.numero_tarjeta ? "error" : ""}`}
                       placeholder="1234 5678 9012 3456"
                       value={formTarjeta.numero_tarjeta}
-                      onChange={e => setFormTarjeta({...formTarjeta, numero_tarjeta: e.target.value})} />
+                      onChange={e => setFormTarjeta({ ...formTarjeta, numero_tarjeta: e.target.value })} />
                     {erroresTarjeta.numero_tarjeta && <p className="form-error-msg">{erroresTarjeta.numero_tarjeta}</p>}
                   </div>
                   <div className="form-grupo">
@@ -608,7 +617,7 @@ function DashboardCliente() {
                     <input type="text" className={`form-input-cliente ${erroresTarjeta.nombre_tarjeta ? "error" : ""}`}
                       placeholder="Como aparece en la tarjeta"
                       value={formTarjeta.nombre_tarjeta}
-                      onChange={e => setFormTarjeta({...formTarjeta, nombre_tarjeta: e.target.value})} />
+                      onChange={e => setFormTarjeta({ ...formTarjeta, nombre_tarjeta: e.target.value })} />
                     {erroresTarjeta.nombre_tarjeta && <p className="form-error-msg">{erroresTarjeta.nombre_tarjeta}</p>}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -617,7 +626,7 @@ function DashboardCliente() {
                       <input type="text" className={`form-input-cliente ${erroresTarjeta.fecha_vencimiento ? "error" : ""}`}
                         placeholder="MM/YYYY"
                         value={formTarjeta.fecha_vencimiento}
-                        onChange={e => setFormTarjeta({...formTarjeta, fecha_vencimiento: e.target.value})} />
+                        onChange={e => setFormTarjeta({ ...formTarjeta, fecha_vencimiento: e.target.value })} />
                       {erroresTarjeta.fecha_vencimiento && <p className="form-error-msg">{erroresTarjeta.fecha_vencimiento}</p>}
                     </div>
                     <div className="form-grupo">
@@ -625,7 +634,7 @@ function DashboardCliente() {
                       <input type="password" className={`form-input-cliente ${erroresTarjeta.cvv ? "error" : ""}`}
                         placeholder="123" maxLength={4}
                         value={formTarjeta.cvv}
-                        onChange={e => setFormTarjeta({...formTarjeta, cvv: e.target.value})} />
+                        onChange={e => setFormTarjeta({ ...formTarjeta, cvv: e.target.value })} />
                       {erroresTarjeta.cvv && <p className="form-error-msg">{erroresTarjeta.cvv}</p>}
                     </div>
                   </div>
@@ -711,7 +720,13 @@ function DashboardCliente() {
                 Si no encontraste la respuesta que buscabas, contáctanos directamente.
               </p>
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                <a href="mailto:soporte@trackflowhub.com" className="btn-primario" style={{ textDecoration: "none" }}>
+                <a
+                  href="https://mail.google.com/mail/?view=cm&to=soporte@trackflowhub.com&su=Soporte TrackFlow-HUB"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primario"
+                  style={{ textDecoration: "none" }}
+                >
                   Enviar correo de soporte
                 </a>
               </div>
