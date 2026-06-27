@@ -1,40 +1,63 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import "../../estilos/cliente.css";
+
+import inicioIcon from "../../assets/iconos/inicio.png";
+import enviosIcon from "../../assets/iconos/envios.png";
+import transporteIcon from "../../assets/iconos/transporte.png";
+import carritoIcon from "../../assets/iconos/carrito.png";
+import perfilIcon from "../../assets/iconos/perfil.png";
+import ayudaIcon from "../../assets/iconos/ayuda.png";
+import logoutIcon from "../../assets/iconos/logout.png";
+import historialIcon from "../../assets/iconos/historial.png";
+import cuponesIcon from "../../assets/iconos/cupones.png";
 
 function DashboardCliente() {
   const navigate = useNavigate();
+  const [vista, setVista] = useState("inicio");
+  const [cargando, setCargando] = useState(false);
+  const [modal, setModal] = useState(null);
+  const [alerta, setAlerta] = useState(null);
 
   const [carrito, setCarrito] = useState([]);
   const [totalCarrito, setTotalCarrito] = useState(0);
   const [metodosPago, setMetodosPago] = useState([]);
   const [metodoSeleccionado, setMetodoSeleccionado] = useState("");
-  const [cargando, setCargando] = useState(false);
-  
-  // ESTADOS NUEVOS
   const [rutasDisponibles, setRutasDisponibles] = useState([]);
   const [reservaciones, setReservaciones] = useState([]);
 
   const [formTarjeta, setFormTarjeta] = useState({
     numero_tarjeta: "", nombre_tarjeta: "", fecha_vencimiento: "", cvv: ""
   });
+  const [erroresTarjeta, setErroresTarjeta] = useState({});
   const [walletId, setWalletId] = useState("");
-
-  useEffect(() => {
-    cargarCarrito();
-    cargarMetodosPago();
-    cargarRutasDisponibles();
-    cargarReservaciones(); // Cargamos el historial de compras
-  }, []);
 
   const getToken = () => localStorage.getItem("token");
 
-  // --- CARGAS DE DATOS ---
+  const mostrarAlerta = (tipo, mensaje) => {
+    setAlerta({ tipo, mensaje });
+    setTimeout(() => setAlerta(null), 4000);
+  };
+
+  useEffect(() => {
+    cargarRutasDisponibles();
+    cargarCarrito();
+    cargarMetodosPago();
+    cargarReservaciones();
+  }, []);
+
+  useEffect(() => {
+    if (vista === "carrito") cargarCarrito();
+    if (vista === "historial") cargarReservaciones();
+    if (vista === "pago") cargarMetodosPago();
+  }, [vista]);
+
   const cargarRutasDisponibles = async () => {
     try {
       const res = await fetch("http://localhost:3000/api/rutas/activas");
       const data = await res.json();
       if (data.success) setRutasDisponibles(data.data);
-    } catch (error) { console.error("Error al cargar rutas", error); }
+    } catch { mostrarAlerta("error", "No se pudieron cargar las rutas disponibles."); }
   };
 
   const cargarCarrito = async () => {
@@ -43,11 +66,8 @@ function DashboardCliente() {
         headers: { "Authorization": `Bearer ${getToken()}` }
       });
       const data = await res.json();
-      if (data.success) {
-        setCarrito(data.data);
-        setTotalCarrito(data.total);
-      }
-    } catch (error) { console.error("Error al cargar carrito", error); }
+      if (data.success) { setCarrito(data.data); setTotalCarrito(data.total); }
+    } catch { console.error("Error al cargar carrito"); }
   };
 
   const cargarMetodosPago = async () => {
@@ -57,7 +77,7 @@ function DashboardCliente() {
       });
       const data = await res.json();
       if (data.success) setMetodosPago(data.data);
-    } catch (error) { console.error("Error al cargar métodos", error); }
+    } catch { console.error("Error al cargar métodos"); }
   };
 
   const cargarReservaciones = async () => {
@@ -67,57 +87,57 @@ function DashboardCliente() {
       });
       const data = await res.json();
       if (data.success) setReservaciones(data.data);
-    } catch (error) { console.error("Error al cargar reservaciones", error); }
+    } catch { console.error("Error al cargar reservaciones"); }
   };
 
-  // --- ALGORITMO LUHN ---
   const validarLuhn = (numero) => {
     const digitos = numero.replace(/\D/g, '');
     if (digitos.length < 13 || digitos.length > 19) return false;
-    let suma = 0;
-    let esPar = false;
+    let suma = 0; let esPar = false;
     for (let i = digitos.length - 1; i >= 0; i--) {
       let digito = parseInt(digitos.charAt(i), 10);
-      if (esPar) {
-        digito *= 2;
-        if (digito > 9) digito -= 9;
-      }
-      suma += digito;
-      esPar = !esPar;
+      if (esPar) { digito *= 2; if (digito > 9) digito -= 9; }
+      suma += digito; esPar = !esPar;
     }
     return (suma % 10) === 0;
   };
 
-  // --- APIS DEL CARRITO ---
-  const agregarAlCarrito = async (servicioId, tipoServicio, servicioData) => {
+  const agregarAlCarrito = async (rutaId, rutaData, fechaInput) => {
+    if (!fechaInput) { mostrarAlerta("warning", "Debes seleccionar una fecha para el viaje."); return; }
     setCargando(true);
     try {
       const res = await fetch("http://localhost:3000/api/carrito", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${getToken()}`
-        },
-        body: JSON.stringify({ 
-          servicio_id: servicioId, 
-          tipo_servicio: tipoServicio,
-          fecha_inicio: servicioData.fecha_inicio,
-          precio_unitario: servicioData.precio_unitario
-        })
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+        body: JSON.stringify({ servicio_id: rutaId, tipo_servicio: "transporte", fecha_inicio: fechaInput, precio_unitario: rutaData.precio })
       });
       const data = await res.json();
-      if (data.success) {
-        cargarCarrito();
-        alert("Servicio agregado al carrito");
-      } else {
-        alert(data.message || "Error al agregar al carrito");
-      }
-    } catch (error) { alert("Error al agregar al carrito"); } 
+      if (data.success) { cargarCarrito(); mostrarAlerta("success", "Servicio agregado al carrito exitosamente."); }
+      else mostrarAlerta("error", data.message || "Error al agregar al carrito.");
+    } catch { mostrarAlerta("error", "Error de conexión. Intenta nuevamente."); }
     finally { setCargando(false); }
   };
 
+  const confirmarEliminarItem = (id) => {
+    setModal({
+      titulo: "Eliminar del carrito",
+      descripcion: "¿Estás seguro que deseas eliminar este servicio de tu carrito?",
+      tipo: "peligro",
+      onConfirmar: () => eliminarDelCarrito(id)
+    });
+  };
+
+  const confirmarVaciarCarrito = () => {
+    setModal({
+      titulo: "Vaciar carrito",
+      descripcion: "¿Estás seguro que deseas eliminar todos los servicios de tu carrito? Esta acción no se puede deshacer.",
+      tipo: "peligro",
+      onConfirmar: () => vaciarCarrito()
+    });
+  };
+
   const eliminarDelCarrito = async (carritoId) => {
-    if (!window.confirm("¿Eliminar este item del carrito?")) return;
+    setModal(null);
     setCargando(true);
     try {
       const res = await fetch(`http://localhost:3000/api/carrito/${carritoId}`, {
@@ -125,17 +145,14 @@ function DashboardCliente() {
         headers: { "Authorization": `Bearer ${getToken()}` }
       });
       const data = await res.json();
-      if (data.success) {
-        cargarCarrito();
-      } else {
-        alert(data.message || "Error al eliminar");
-      }
-    } catch (error) { alert("Error al eliminar"); } 
+      if (data.success) { cargarCarrito(); mostrarAlerta("success", "Servicio eliminado del carrito."); }
+      else mostrarAlerta("error", data.message || "Error al eliminar.");
+    } catch { mostrarAlerta("error", "Error de conexión."); }
     finally { setCargando(false); }
   };
 
   const vaciarCarrito = async () => {
-    if (!window.confirm("¿Vaciar todo el carrito?")) return;
+    setModal(null);
     setCargando(true);
     try {
       const res = await fetch("http://localhost:3000/api/carrito", {
@@ -143,109 +160,115 @@ function DashboardCliente() {
         headers: { "Authorization": `Bearer ${getToken()}` }
       });
       const data = await res.json();
-      if (data.success) {
-        cargarCarrito();
-      }
-    } catch (error) { alert("Error al vaciar carrito"); } 
+      if (data.success) { cargarCarrito(); mostrarAlerta("success", "Carrito vaciado exitosamente."); }
+    } catch { mostrarAlerta("error", "Error al vaciar carrito."); }
     finally { setCargando(false); }
   };
 
-  // --- MÉTODOS DE PAGO Y CHECKOUT ---
+  const validarFormTarjeta = () => {
+    const errores = {};
+    if (!validarLuhn(formTarjeta.numero_tarjeta)) errores.numero_tarjeta = "Número de tarjeta inválido (verificación Luhn fallida).";
+    if (!formTarjeta.nombre_tarjeta.trim()) errores.nombre_tarjeta = "El nombre es requerido.";
+    if (!/^\d{2}\/\d{4}$/.test(formTarjeta.fecha_vencimiento)) errores.fecha_vencimiento = "Formato inválido. Usa MM/YYYY.";
+    if (!/^\d{3,4}$/.test(formTarjeta.cvv)) errores.cvv = "CVV debe tener 3 o 4 dígitos.";
+    setErroresTarjeta(errores);
+    return Object.keys(errores).length === 0;
+  };
+
   const agregarTarjeta = async (e) => {
     e.preventDefault();
-    if (!validarLuhn(formTarjeta.numero_tarjeta)) {
-      return alert("Error: El número de tarjeta es inválido según el algoritmo de Luhn.");
-    }
+    if (!validarFormTarjeta()) return;
+    setCargando(true);
     try {
       const res = await fetch("http://localhost:3000/api/pagos/metodo", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${getToken()}`
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
         body: JSON.stringify({ tipo: "tarjeta", ...formTarjeta })
       });
       const data = await res.json();
-      alert(data.message);
       if (data.success) {
+        mostrarAlerta("success", data.message);
         setFormTarjeta({ numero_tarjeta: "", nombre_tarjeta: "", fecha_vencimiento: "", cvv: "" });
+        setErroresTarjeta({});
         cargarMetodosPago();
-      }
-    } catch (error) { alert("Error al agregar tarjeta."); }
+      } else mostrarAlerta("error", data.message);
+    } catch { mostrarAlerta("error", "Error al agregar tarjeta."); }
+    finally { setCargando(false); }
   };
 
   const agregarWallet = async (e) => {
     e.preventDefault();
-    if (!walletId) return alert("Ingrese el ID de su Billetera Virtual.");
+    if (!walletId) { mostrarAlerta("warning", "Ingresa el ID de tu billetera virtual."); return; }
+    setCargando(true);
     try {
       const res = await fetch("http://localhost:3000/api/pagos/metodo", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${getToken()}`
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
         body: JSON.stringify({ tipo: "wallet", wallet_id: walletId })
       });
       const data = await res.json();
-      alert(data.message);
-      if (data.success) {
-        setWalletId("");
-        cargarMetodosPago();
-      }
-    } catch (error) { alert("Error al agregar wallet."); }
+      if (data.success) { mostrarAlerta("success", data.message); setWalletId(""); cargarMetodosPago(); }
+      else mostrarAlerta("error", data.message);
+    } catch { mostrarAlerta("error", "Error al agregar wallet."); }
+    finally { setCargando(false); }
   };
 
-  const procesarPago = async () => {
-    if (!metodoSeleccionado) return alert("Por favor, seleccione un método de pago.");
-    if (carrito.length === 0) return alert("Tu carrito está vacío.");
+  const procesarPago = () => {
+    if (!metodoSeleccionado) { mostrarAlerta("warning", "Selecciona un método de pago."); return; }
+    if (carrito.length === 0) { mostrarAlerta("warning", "Tu carrito está vacío."); return; }
+    setModal({
+      titulo: "Confirmar pago",
+      descripcion: `¿Confirmas el pago de Q${totalCarrito} con el método seleccionado? Esta acción procesará tu reservación.`,
+      tipo: "primario",
+      onConfirmar: () => ejecutarPago()
+    });
+  };
+
+  const ejecutarPago = async () => {
+    setModal(null);
     setCargando(true);
     try {
       const res = await fetch("http://localhost:3000/api/pagos/checkout", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${getToken()}`
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
         body: JSON.stringify({ metodo_pago_id: metodoSeleccionado })
       });
       const data = await res.json();
-      alert(data.message);
       if (data.success) {
-        cargarCarrito();
-        cargarMetodosPago(); // Refrescar saldos
-        cargarReservaciones(); // Mostrar la nueva reserva en el historial
-      }
-    } catch (error) { alert("Error de conexión al procesar el pago."); } 
+        mostrarAlerta("success", "¡Pago procesado exitosamente! Tu reservación está confirmada.");
+        cargarCarrito(); cargarMetodosPago(); cargarReservaciones();
+      } else mostrarAlerta("error", data.message);
+    } catch { mostrarAlerta("error", "Error de conexión al procesar el pago."); }
     finally { setCargando(false); }
   };
 
-  // --- CANCELACIÓN Y REEMBOLSO ---
-  const cancelarReservacion = async (reservacionId, fechaInicio) => {
-    // 1. Validación visual rápida en el frontend de las 24 horas
+  const confirmarCancelar = (id, fechaInicio) => {
     const fechaServicio = new Date(fechaInicio);
     const ahora = new Date();
-    const diferenciaHoras = (fechaServicio - ahora) / (1000 * 60 * 60);
+    const horas = (fechaServicio - ahora) / (1000 * 60 * 60);
+    if (horas < 24) { mostrarAlerta("error", "Solo puedes cancelar con al menos 24 horas de anticipación."); return; }
+    setModal({
+      titulo: "Cancelar reservación",
+      descripcion: "¿Estás seguro que deseas cancelar esta reservación? Tu dinero será reembolsado automáticamente.",
+      tipo: "peligro",
+      onConfirmar: () => cancelarReservacion(id)
+    });
+  };
 
-    if (diferenciaHoras < 24) {
-      return alert("Política estricta: Solo puedes cancelar con al menos 24 horas de anticipación a la fecha de tu viaje.");
-    }
-
-    if (!window.confirm("¿Estás seguro de cancelar esta reservación? Tu dinero será reembolsado automáticamente a tu método de pago.")) return;
-
+  const cancelarReservacion = async (id) => {
+    setModal(null);
     setCargando(true);
     try {
-      const res = await fetch(`http://localhost:3000/api/pagos/reservacion/${reservacionId}/cancelar`, {
+      const res = await fetch(`http://localhost:3000/api/pagos/reservacion/${id}/cancelar`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${getToken()}` }
       });
       const data = await res.json();
-      alert(data.message);
-      
       if (data.success) {
-        cargarReservaciones(); // Refrescar lista de reservas (ahora dirá "cancelado")
-        cargarMetodosPago(); // Refrescar métodos de pago para ver el dinero devuelto
-      }
-    } catch (error) { alert("Error de red al cancelar reservación."); }
+        mostrarAlerta("success", "Reservación cancelada. El reembolso se aplicó a tu método de pago.");
+        cargarReservaciones(); cargarMetodosPago();
+      } else mostrarAlerta("error", data.message);
+    } catch { mostrarAlerta("error", "Error de red al cancelar."); }
     finally { setCargando(false); }
   };
 
@@ -256,206 +279,446 @@ function DashboardCliente() {
     navigate("/");
   };
 
+  const getBadgeClass = (estado) => {
+    const clases = { confirmado: "badge-confirmado", cancelado: "badge-cancelado", pendiente_pago: "badge-pendiente", en_transito: "badge-en_transito", entregado: "badge-entregado" };
+    return `badge-estado ${clases[estado] || "badge-pendiente"}`;
+  };
+
+  const navItems = [
+    { id: "inicio", label: "Inicio", icon: inicioIcon },
+    { id: "transporte", label: "Transporte", icon: transporteIcon },
+    { id: "carrito", label: "Carrito", icon: carritoIcon },
+    { id: "historial", label: "Historial", icon: historialIcon },
+    { id: "pago", label: "Métodos de Pago", icon: enviosIcon },
+    { id: "cupones", label: "Cupones", icon: cuponesIcon },
+    { id: "perfil", label: "Mi Perfil", icon: perfilIcon },
+    { id: "ayuda", label: "Ayuda", icon: ayudaIcon },
+  ];
+
   return (
-    <div style={{ padding: "20px", backgroundColor: "#F1F5F9", minHeight: "100vh" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
-        <h1>Panel de Cliente</h1>
-        <button onClick={cerrarSesion} style={{ padding: "10px", backgroundColor: "#EF4444", color: "white", border: "none", borderRadius: "5px", cursor: "pointer" }}>Cerrar sesión</button>
-      </div>
+    <div className="cliente-page">
 
-      {/* --- CATÁLOGO DE RUTAS --- */}
-      <div style={{ backgroundColor: "white", padding: "20px", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", marginBottom: "20px" }}>
-        <h2>Catálogo de Rutas de Transporte</h2>
-        <p style={{ color: "#64748B", marginBottom: "15px" }}>Selecciona una fecha y agrega el viaje a tu carrito.</p>
-        
-        {rutasDisponibles.length === 0 ? (
-          <p>No hay rutas disponibles en este momento.</p>
-        ) : (
-          <div style={{ display: "flex", gap: "15px", flexWrap: "wrap" }}>
-            {rutasDisponibles.map(ruta => (
-              <div key={ruta.id} style={{ border: "1px solid #E2E8F0", padding: "15px", borderRadius: "8px", width: "280px" }}>
-                <h4 style={{ margin: "0 0 10px 0", color: "#0F172A" }}>{ruta.nombre_ruta}</h4>
-                <p style={{ margin: "5px 0", fontSize: "14px" }}><strong>Origen:</strong> {ruta.origen}</p>
-                <p style={{ margin: "5px 0", fontSize: "14px" }}><strong>Destino:</strong> {ruta.destino}</p>
-                <p style={{ margin: "5px 0", fontSize: "14px", color: "#10B981", fontWeight: "bold" }}>Precio: Q{ruta.precio}</p>
-                
-                <div style={{ marginTop: "15px" }}>
-                  <label style={{ fontSize: "12px", color: "#64748B" }}>Fecha de viaje:</label>
-                  <input 
-                    type="date" 
-                    id={`fecha-ruta-${ruta.id}`} 
-                    style={{ width: "100%", padding: "8px", marginBottom: "10px", borderRadius: "5px", border: "1px solid #CBD5E1" }}
-                  />
-                  <button 
-                    onClick={() => {
-                      const fechaInput = document.getElementById(`fecha-ruta-${ruta.id}`).value;
-                      if (!fechaInput) return alert("Debes seleccionar una fecha para el viaje.");
-                      agregarAlCarrito(ruta.id, "transporte", { fecha_inicio: fechaInput, precio_unitario: ruta.precio });
-                    }}
-                    disabled={cargando}
-                    style={{ width: "100%", padding: "8px", backgroundColor: "#0F172A", color: "white", border: "none", borderRadius: "5px", cursor: cargando ? "not-allowed" : "pointer" }}
-                  >
-                    Agregar al Carrito
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* SPINNER DE CARGA */}
+      {cargando && (
+        <div className="spinner-overlay">
+          <div className="spinner"></div>
+        </div>
+      )}
 
-      {/* --- MIS RESERVACIONES (NUEVO) --- */}
-      <div style={{ backgroundColor: "white", padding: "20px", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", marginBottom: "20px" }}>
-        <h2>Mis Reservaciones y Compras</h2>
-        {reservaciones.length === 0 ? (
-          <p style={{ color: "#64748B" }}>Aún no has realizado ninguna compra.</p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-              <thead>
-                <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "2px solid #E2E8F0" }}>
-                  <th style={{ padding: "12px" }}>Servicio</th>
-                  <th style={{ padding: "12px" }}>Fecha</th>
-                  <th style={{ padding: "12px" }}>Total</th>
-                  <th style={{ padding: "12px" }}>Estado</th>
-                  <th style={{ padding: "12px" }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reservaciones.map(res => (
-                  <tr key={res.id} style={{ borderBottom: "1px solid #E2E8F0" }}>
-                    <td style={{ padding: "12px" }}><strong>{res.tipo_servicio === 'envio' ? res.nombre_envio : res.nombre_transporte}</strong></td>
-                    <td style={{ padding: "12px" }}>{new Date(res.fecha_inicio).toLocaleDateString('es-GT', { timeZone: 'UTC' })}</td>
-                    <td style={{ padding: "12px", color: "#10B981", fontWeight: "bold" }}>Q{res.precio_total}</td>
-                    <td style={{ padding: "12px" }}>
-                      <span style={{ 
-                        padding: "4px 8px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold",
-                        backgroundColor: res.estado === 'confirmado' ? '#DCFCE7' : res.estado === 'cancelado' ? '#FEE2E2' : '#F1F5F9',
-                        color: res.estado === 'confirmado' ? '#166534' : res.estado === 'cancelado' ? '#991B1B' : '#475569'
-                      }}>
-                        {res.estado.toUpperCase()}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px" }}>
-                      {res.estado === 'confirmado' && (
-                        <button 
-                          onClick={() => cancelarReservacion(res.id, res.fecha_inicio)}
-                          disabled={cargando}
-                          style={{ padding: "6px 12px", backgroundColor: "#EF4444", color: "white", border: "none", borderRadius: "5px", cursor: cargando ? "not-allowed" : "pointer" }}
-                        >
-                          Cancelar y Reembolsar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-        
-        {/* COLUMNA IZQUIERDA: CARRITO */}
-        <div style={{ flex: "1 1 400px", backgroundColor: "white", padding: "20px", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
-          <h2>Mi Carrito</h2>
-          {carrito.length === 0 ? (
-            <p>El carrito está vacío.</p>
-          ) : (
-            <div>
-              {carrito.map(item => (
-                <div key={item.id} style={{ borderBottom: "1px solid #ccc", padding: "10px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ flex: 1 }}>
-                    <strong>{item.tipo_servicio === 'envio' ? item.nombre_envio : item.nombre_transporte}</strong>
-                    <p style={{ margin: "5px 0", fontSize: "0.9em", color: "#666" }}>Fecha: {new Date(item.fecha_inicio).toLocaleDateString('es-GT', { timeZone: 'UTC' })}</p>
-                    <p style={{ margin: "5px 0", color: "#10B981", fontWeight: "bold" }}>Q{item.subtotal}</p>
-                  </div>
-                  <button 
-                    onClick={() => eliminarDelCarrito(item.id)}
-                    disabled={cargando}
-                    style={{ padding: "5px 10px", backgroundColor: "#EF4444", color: "white", border: "none", borderRadius: "3px", cursor: cargando ? "not-allowed" : "pointer" }}
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              ))}
-              
-              <h3 style={{ marginTop: "20px", textAlign: "right" }}>Total: Q{totalCarrito}</h3>
-              
-              <button 
-                onClick={vaciarCarrito}
-                disabled={cargando}
-                style={{ width: "100%", marginTop: "10px", padding: "10px", backgroundColor: "#F59E0B", color: "white", border: "none", borderRadius: "5px", cursor: cargando ? "not-allowed" : "pointer" }}
+      {/* MODAL DE CONFIRMACIÓN */}
+      {modal && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <h3 className="modal-titulo">{modal.titulo}</h3>
+            <p className="modal-descripcion">{modal.descripcion}</p>
+            <div className="modal-acciones">
+              <button className="btn-secundario" onClick={() => setModal(null)}>Cancelar</button>
+              <button
+                className={modal.tipo === "peligro" ? "btn-peligro" : "btn-primario"}
+                onClick={modal.onConfirmar}
               >
-                Vaciar Carrito
+                Confirmar
               </button>
-              
-              <div style={{ marginTop: "20px", padding: "15px", backgroundColor: "#F8FAFC", borderRadius: "5px" }}>
-                <h4>Pagar Reservación</h4>
-                <select 
-                  style={{ width: "100%", padding: "10px", marginBottom: "15px" }}
-                  value={metodoSeleccionado}
-                  onChange={(e) => setMetodoSeleccionado(e.target.value)}
-                  disabled={cargando}
-                >
-                  <option value="">-- Selecciona una tarjeta / wallet --</option>
-                  {metodosPago.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.tipo === 'tarjeta' ? `Tarjeta: ${m.numero_tarjeta}` : `Wallet: ${m.wallet_id}`} (Saldo: Q{m.saldo})
-                    </option>
-                  ))}
-                </select>
-                <button 
-                  onClick={procesarPago}
-                  disabled={cargando}
-                  style={{ width: "100%", padding: "12px", backgroundColor: "#3B82F6", color: "white", border: "none", borderRadius: "5px", fontWeight: "bold", cursor: cargando ? "not-allowed" : "pointer" }}
-                >
-                  {cargando ? "Procesando..." : "Confirmar Pago"}
-                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NAVBAR */}
+      <nav className="navbar-cliente">
+        <span className="navbar-brand-cliente">TrackFlow-HUB</span>
+        <div className="navbar-nav-cliente">
+          {navItems.map(item => (
+            <button
+              key={item.id}
+              className={`nav-btn-cliente ${vista === item.id ? "active" : ""}`}
+              onClick={() => setVista(item.id)}
+            >
+              <img src={item.icon} alt={item.label} />
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <button className="btn-logout-cliente" onClick={cerrarSesion}>
+          <img src={logoutIcon} alt="Salir" />
+          Cerrar Sesión
+        </button>
+      </nav>
+
+      {/* ALERTA GLOBAL */}
+      {alerta && (
+        <div style={{ position: "fixed", top: "80px", right: "24px", zIndex: 9997, minWidth: "300px" }}>
+          <div className={`cliente-alert ${alerta.tipo}`}>
+            {alerta.tipo === "success" && "✓ "}
+            {alerta.tipo === "error" && "✕ "}
+            {alerta.tipo === "warning" && "⚠ "}
+            {alerta.tipo === "info" && "ℹ "}
+            {alerta.mensaje}
+          </div>
+        </div>
+      )}
+
+      <div className="cliente-content">
+
+        {/* INICIO */}
+        {vista === "inicio" && (
+          <div>
+            <div className="cliente-card text-center" style={{ padding: "48px" }}>
+              <h1 style={{ fontSize: "28px", fontWeight: "800", color: "var(--color-secundario)", marginBottom: "8px" }}>
+                Bienvenido a TrackFlow-HUB
+              </h1>
+              <p style={{ color: "var(--color-texto-mutado)", marginBottom: "32px", fontSize: "15px" }}>
+                Gestiona tus envíos y servicios de transporte desde un solo lugar.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "16px", maxWidth: "700px", margin: "0 auto" }}>
+                {navItems.filter(n => n.id !== "inicio" && n.id !== "ayuda").map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setVista(item.id)}
+                    style={{
+                      padding: "20px 12px", borderRadius: "var(--radio)",
+                      border: "1px solid #E2E8F0", background: "var(--color-fondo)",
+                      cursor: "pointer", display: "flex", flexDirection: "column",
+                      alignItems: "center", gap: "8px", transition: "all 0.2s"
+                    }}
+                    onMouseOver={e => e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)"}
+                    onMouseOut={e => e.currentTarget.style.boxShadow = "none"}
+                  >
+                    <img src={item.icon} alt={item.label} style={{ width: "28px", height: "28px" }} />
+                    <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--color-secundario)" }}>{item.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
-          )}
-        </div>
 
-        {/* COLUMNA DERECHA: MÉTODOS DE PAGO */}
-        <div style={{ flex: "1 1 400px", backgroundColor: "white", padding: "20px", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
-          <h2>Mis Métodos de Pago</h2>
-          
-          <div style={{ marginBottom: "20px" }}>
-            {metodosPago.length === 0 ? <p>No tienes métodos de pago registrados.</p> : (
-              <ul style={{ listStyle: "none", padding: 0 }}>
-                {metodosPago.map(m => (
-                  <li key={m.id} style={{ marginBottom: "10px", padding: "10px", backgroundColor: "#F8FAFC", borderRadius: "5px" }}>
-                    <strong>{m.tipo === 'tarjeta' ? 'Tarjeta' : 'Wallet'}</strong> - Saldo: <span style={{ color: "#10B981" }}>Q{m.saldo}</span>
-                    <br />
-                    <small>{m.tipo === 'tarjeta' ? m.numero_tarjeta : m.wallet_id}</small>
-                  </li>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
+              <div className="cliente-card text-center">
+                <h3 style={{ fontSize: "32px", fontWeight: "800", color: "var(--color-primario)" }}>{carrito.length}</h3>
+                <p style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Servicios en carrito</p>
+              </div>
+              <div className="cliente-card text-center">
+                <h3 style={{ fontSize: "32px", fontWeight: "800", color: "var(--color-primario)" }}>{reservaciones.filter(r => r.estado === "confirmado").length}</h3>
+                <p style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Reservaciones activas</p>
+              </div>
+              <div className="cliente-card text-center">
+                <h3 style={{ fontSize: "32px", fontWeight: "800", color: "var(--color-primario)" }}>{metodosPago.length}</h3>
+                <p style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Métodos de pago</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TRANSPORTE */}
+        {vista === "transporte" && (
+          <div>
+            <div className="cliente-card">
+              <h2 className="cliente-card-title">Rutas de Transporte Disponibles</h2>
+              <p className="cliente-card-subtitle">Selecciona una fecha y agrega el viaje a tu carrito.</p>
+
+              {rutasDisponibles.length === 0 ? (
+                <div className="estado-vacio">
+                  <img src={transporteIcon} alt="Sin rutas" style={{ width: "48px", opacity: 0.3 }} />
+                  <p>No hay rutas disponibles en este momento.</p>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "16px" }}>
+                  {rutasDisponibles.map(ruta => {
+                    const [fecha, setFecha] = useState("");
+                    return (
+                      <div key={ruta.id} className="ruta-card">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "12px" }}>
+                          <h4 style={{ fontWeight: "700", color: "var(--color-secundario)", margin: 0 }}>{ruta.nombre_ruta}</h4>
+                          <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--color-primario)" }}>Q{ruta.precio}</span>
+                        </div>
+                        <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "4px" }}>📍 {ruta.origen} → {ruta.destino}</p>
+                        {ruta.tiempo_estimado && <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "12px" }}>⏱ {ruta.tiempo_estimado}</p>}
+                        <div className="form-grupo">
+                          <label className="form-label-cliente">Fecha de viaje</label>
+                          <input
+                            type="date"
+                            className="form-input-cliente"
+                            value={fecha}
+                            onChange={e => setFecha(e.target.value)}
+                            min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                          />
+                        </div>
+                        <button
+                          className="btn-primario"
+                          style={{ width: "100%" }}
+                          onClick={() => agregarAlCarrito(ruta.id, ruta, fecha)}
+                          disabled={cargando}
+                        >
+                          Agregar al Carrito
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* CARRITO */}
+        {vista === "carrito" && (
+          <div className="cliente-card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div>
+                <h2 className="cliente-card-title">Mi Carrito</h2>
+                <p className="cliente-card-subtitle">{carrito.length} servicio(s) agregado(s)</p>
+              </div>
+              {carrito.length > 0 && (
+                <button className="btn-secundario" onClick={confirmarVaciarCarrito}>Vaciar carrito</button>
+              )}
+            </div>
+
+            {carrito.length === 0 ? (
+              <div className="estado-vacio">
+                <img src={carritoIcon} alt="Carrito vacío" style={{ width: "48px", opacity: 0.3 }} />
+                <p>Tu carrito está vacío. Agrega servicios de transporte.</p>
+              </div>
+            ) : (
+              <>
+                {carrito.map(item => (
+                  <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: "1px solid #E2E8F0" }}>
+                    <div>
+                      <p style={{ fontWeight: "700", color: "var(--color-secundario)", marginBottom: "4px" }}>
+                        {item.tipo_servicio === 'envio' ? item.nombre_envio : item.nombre_transporte}
+                      </p>
+                      <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>
+                        Fecha: {new Date(item.fecha_inicio).toLocaleDateString('es-GT', { timeZone: 'UTC' })}
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                      <span style={{ fontWeight: "700", color: "var(--color-primario)", fontSize: "16px" }}>Q{item.subtotal}</span>
+                      <button className="btn-secundario" style={{ color: "#EF4444", borderColor: "#FECACA" }} onClick={() => confirmarEliminarItem(item.id)}>
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+
+                <div style={{ marginTop: "20px", padding: "16px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
+                    <span style={{ fontWeight: "700", color: "var(--color-secundario)", fontSize: "18px" }}>Total:</span>
+                    <span style={{ fontWeight: "800", color: "var(--color-primario)", fontSize: "20px" }}>Q{totalCarrito}</span>
+                  </div>
+                  <div className="form-grupo">
+                    <label className="form-label-cliente">Método de pago</label>
+                    <select
+                      className="form-input-cliente"
+                      value={metodoSeleccionado}
+                      onChange={e => setMetodoSeleccionado(e.target.value)}
+                    >
+                      <option value="">-- Selecciona un método --</option>
+                      {metodosPago.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.tipo === 'tarjeta' ? `Tarjeta: ${m.numero_tarjeta}` : `Wallet: ${m.wallet_id}`} (Saldo: Q{m.saldo})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button className="btn-primario" style={{ width: "100%", padding: "14px", fontSize: "15px" }} onClick={procesarPago} disabled={cargando}>
+                    Confirmar Pago
+                  </button>
+                </div>
+              </>
             )}
           </div>
+        )}
 
-          <hr style={{ margin: "20px 0" }}/>
+        {/* HISTORIAL */}
+        {vista === "historial" && (
+          <div className="cliente-card">
+            <h2 className="cliente-card-title">Mis Reservaciones</h2>
+            <p className="cliente-card-subtitle">Historial de todos tus servicios contratados.</p>
 
-          <h3>Agregar Tarjeta</h3>
-          <form onSubmit={agregarTarjeta} style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "30px" }}>
-            <input type="text" placeholder="Número de Tarjeta (16 dígitos)" required value={formTarjeta.numero_tarjeta} onChange={e => setFormTarjeta({...formTarjeta, numero_tarjeta: e.target.value})} disabled={cargando} style={{ padding: "8px" }}/>
-            <input type="text" placeholder="Nombre en la Tarjeta" required value={formTarjeta.nombre_tarjeta} onChange={e => setFormTarjeta({...formTarjeta, nombre_tarjeta: e.target.value})} disabled={cargando} style={{ padding: "8px" }}/>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <input type="text" placeholder="MM/YYYY" required value={formTarjeta.fecha_vencimiento} onChange={e => setFormTarjeta({...formTarjeta, fecha_vencimiento: e.target.value})} disabled={cargando} style={{ padding: "8px", flex: 1 }}/>
-              <input type="password" placeholder="CVV" required value={formTarjeta.cvv} onChange={e => setFormTarjeta({...formTarjeta, cvv: e.target.value})} disabled={cargando} style={{ padding: "8px", flex: 1 }} maxLength={4}/>
+            {reservaciones.length === 0 ? (
+              <div className="estado-vacio">
+                <img src={historialIcon} alt="Sin reservaciones" style={{ width: "48px", opacity: 0.3 }} />
+                <p>Aún no has realizado ninguna reservación.</p>
+              </div>
+            ) : (
+              reservaciones.map(res => (
+                <div key={res.id} style={{ padding: "16px", marginBottom: "12px", border: "1px solid #E2E8F0", borderRadius: "var(--radio)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                    <div>
+                      <p style={{ fontWeight: "700", color: "var(--color-secundario)", marginBottom: "4px" }}>
+                        {res.tipo_servicio === 'envio' ? res.nombre_envio : res.nombre_transporte}
+                      </p>
+                      <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>
+                        Fecha: {new Date(res.fecha_inicio).toLocaleDateString('es-GT', { timeZone: 'UTC' })}
+                      </p>
+                      <p style={{ fontSize: "16px", fontWeight: "700", color: "var(--color-primario)", marginTop: "4px" }}>Q{res.precio_total}</p>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
+                      <span className={getBadgeClass(res.estado)}>{res.estado.replace("_", " ").toUpperCase()}</span>
+                      {res.estado === 'confirmado' && (
+                        <button className="btn-secundario" style={{ color: "#EF4444", borderColor: "#FECACA", fontSize: "12px", padding: "6px 12px" }}
+                          onClick={() => confirmarCancelar(res.id, res.fecha_inicio)}>
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* MÉTODOS DE PAGO */}
+        {vista === "pago" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+            <div className="cliente-card">
+              <h2 className="cliente-card-title">Mis Métodos de Pago</h2>
+              {metodosPago.length === 0 ? (
+                <p style={{ color: "var(--color-texto-mutado)", fontSize: "14px" }}>No tienes métodos registrados.</p>
+              ) : (
+                metodosPago.map(m => (
+                  <div key={m.id} style={{ padding: "14px", marginBottom: "10px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)", border: "1px solid #E2E8F0" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontWeight: "700", color: "var(--color-secundario)" }}>
+                        {m.tipo === 'tarjeta' ? '💳 Tarjeta' : '👛 Wallet'}
+                      </span>
+                      <span style={{ fontWeight: "700", color: "var(--color-primario)" }}>Q{m.saldo}</span>
+                    </div>
+                    <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginTop: "4px" }}>
+                      {m.tipo === 'tarjeta' ? m.numero_tarjeta : m.wallet_id}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
-            <button type="submit" disabled={cargando} style={{ padding: "10px", backgroundColor: "#10B981", color: "white", border: "none", borderRadius: "5px", cursor: cargando ? "not-allowed" : "pointer" }}>Agregar Tarjeta</button>
-          </form>
 
-          <h3>Agregar Wallet Alternativa</h3>
-          <form onSubmit={agregarWallet} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            <input type="text" placeholder="ID de tu Billetera (Ej. user@wallet)" required value={walletId} onChange={e => setWalletId(e.target.value)} disabled={cargando} style={{ padding: "8px" }}/>
-            <button type="submit" disabled={cargando} style={{ padding: "10px", backgroundColor: "#8B5CF6", color: "white", border: "none", borderRadius: "5px", cursor: cargando ? "not-allowed" : "pointer" }}>Vincular Wallet</button>
-          </form>
+            <div>
+              <div className="cliente-card" style={{ marginBottom: "24px" }}>
+                <h2 className="cliente-card-title">Agregar Tarjeta</h2>
+                <form onSubmit={agregarTarjeta}>
+                  <div className="form-grupo">
+                    <label className="form-label-cliente">Número de Tarjeta *</label>
+                    <input type="text" className={`form-input-cliente ${erroresTarjeta.numero_tarjeta ? "error" : ""}`}
+                      placeholder="1234 5678 9012 3456"
+                      value={formTarjeta.numero_tarjeta}
+                      onChange={e => setFormTarjeta({...formTarjeta, numero_tarjeta: e.target.value})} />
+                    {erroresTarjeta.numero_tarjeta && <p className="form-error-msg">{erroresTarjeta.numero_tarjeta}</p>}
+                  </div>
+                  <div className="form-grupo">
+                    <label className="form-label-cliente">Nombre en la Tarjeta *</label>
+                    <input type="text" className={`form-input-cliente ${erroresTarjeta.nombre_tarjeta ? "error" : ""}`}
+                      placeholder="Como aparece en la tarjeta"
+                      value={formTarjeta.nombre_tarjeta}
+                      onChange={e => setFormTarjeta({...formTarjeta, nombre_tarjeta: e.target.value})} />
+                    {erroresTarjeta.nombre_tarjeta && <p className="form-error-msg">{erroresTarjeta.nombre_tarjeta}</p>}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div className="form-grupo">
+                      <label className="form-label-cliente">Vencimiento *</label>
+                      <input type="text" className={`form-input-cliente ${erroresTarjeta.fecha_vencimiento ? "error" : ""}`}
+                        placeholder="MM/YYYY"
+                        value={formTarjeta.fecha_vencimiento}
+                        onChange={e => setFormTarjeta({...formTarjeta, fecha_vencimiento: e.target.value})} />
+                      {erroresTarjeta.fecha_vencimiento && <p className="form-error-msg">{erroresTarjeta.fecha_vencimiento}</p>}
+                    </div>
+                    <div className="form-grupo">
+                      <label className="form-label-cliente">CVV *</label>
+                      <input type="password" className={`form-input-cliente ${erroresTarjeta.cvv ? "error" : ""}`}
+                        placeholder="123" maxLength={4}
+                        value={formTarjeta.cvv}
+                        onChange={e => setFormTarjeta({...formTarjeta, cvv: e.target.value})} />
+                      {erroresTarjeta.cvv && <p className="form-error-msg">{erroresTarjeta.cvv}</p>}
+                    </div>
+                  </div>
+                  <button type="submit" className="btn-primario" style={{ width: "100%" }} disabled={cargando}>
+                    Agregar Tarjeta
+                  </button>
+                </form>
+              </div>
 
-        </div>
+              <div className="cliente-card">
+                <h2 className="cliente-card-title">Agregar Wallet</h2>
+                <form onSubmit={agregarWallet}>
+                  <div className="form-grupo">
+                    <label className="form-label-cliente">ID de Billetera Virtual *</label>
+                    <input type="text" className="form-input-cliente"
+                      placeholder="usuario@wallet"
+                      value={walletId}
+                      onChange={e => setWalletId(e.target.value)} />
+                  </div>
+                  <button type="submit" className="btn-primario" style={{ width: "100%", backgroundColor: "#7C3AED" }} disabled={cargando}>
+                    Vincular Wallet
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CUPONES */}
+        {vista === "cupones" && (
+          <div className="cliente-card">
+            <h2 className="cliente-card-title">Mis Cupones</h2>
+            <p className="cliente-card-subtitle">Cupones recibidos de operadores y empresas de transporte.</p>
+            <div className="estado-vacio">
+              <img src={cuponesIcon} alt="Sin cupones" style={{ width: "48px", opacity: 0.3 }} />
+              <p>No tienes cupones disponibles en este momento.</p>
+            </div>
+          </div>
+        )}
+
+        {/* PERFIL */}
+        {vista === "perfil" && (
+          <div className="cliente-card">
+            <h2 className="cliente-card-title">Mi Perfil</h2>
+            <p className="cliente-card-subtitle">Información de tu cuenta en TrackFlow-HUB.</p>
+            <div className="estado-vacio">
+              <img src={perfilIcon} alt="Perfil" style={{ width: "48px", opacity: 0.3 }} />
+              <p>Módulo de perfil disponible próximamente.</p>
+            </div>
+          </div>
+        )}
+
+        {/* AYUDA */}
+        {vista === "ayuda" && (
+          <div>
+            <div className="cliente-card">
+              <h2 className="cliente-card-title">Centro de Ayuda</h2>
+              <p className="cliente-card-subtitle">Encuentra respuestas a tus preguntas más frecuentes.</p>
+
+              {[
+                { pregunta: "¿Cómo agrego un servicio al carrito?", respuesta: "Ve a la sección de Transporte, selecciona una fecha para tu viaje y haz clic en 'Agregar al Carrito'." },
+                { pregunta: "¿Cómo pago mis reservaciones?", respuesta: "Ve a Mi Carrito, selecciona un método de pago registrado y haz clic en 'Confirmar Pago'." },
+                { pregunta: "¿Puedo cancelar una reservación?", respuesta: "Sí, puedes cancelar hasta 24 horas antes de la fecha del servicio. Ve a Historial y haz clic en 'Cancelar'. El reembolso se aplica automáticamente." },
+                { pregunta: "¿Cómo agrego una tarjeta de crédito?", respuesta: "Ve a Métodos de Pago, completa el formulario con los datos de tu tarjeta. El número es validado con el algoritmo de Luhn para mayor seguridad." },
+                { pregunta: "¿Qué es una Wallet?", respuesta: "Es un método de pago alternativo tipo billetera virtual. Puedes vincularla con tu ID de usuario." },
+                { pregunta: "¿Cómo uso un cupón de descuento?", respuesta: "Los cupones enviados por operadores o empresas aparecen en la sección de Cupones. Puedes aplicarlos al momento del pago." },
+              ].map((item, i) => (
+                <details key={i} style={{ marginBottom: "12px", border: "1px solid #E2E8F0", borderRadius: "var(--radio)", overflow: "hidden" }}>
+                  <summary style={{ padding: "14px 16px", cursor: "pointer", fontWeight: "600", color: "var(--color-secundario)", backgroundColor: "var(--color-fondo)", listStyle: "none", display: "flex", justifyContent: "space-between" }}>
+                    {item.pregunta}
+                    <span style={{ color: "var(--color-primario)" }}>+</span>
+                  </summary>
+                  <p style={{ padding: "14px 16px", fontSize: "14px", color: "var(--color-texto-mutado)", lineHeight: "1.6", margin: 0 }}>
+                    {item.respuesta}
+                  </p>
+                </details>
+              ))}
+            </div>
+
+            <div className="cliente-card">
+              <h2 className="cliente-card-title">¿Necesitas más ayuda?</h2>
+              <p style={{ fontSize: "14px", color: "var(--color-texto-mutado)", marginBottom: "16px" }}>
+                Si no encontraste la respuesta que buscabas, contáctanos directamente.
+              </p>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                <a href="mailto:soporte@trackflowhub.com" className="btn-primario" style={{ textDecoration: "none" }}>
+                  Enviar correo de soporte
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
