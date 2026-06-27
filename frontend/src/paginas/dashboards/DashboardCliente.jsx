@@ -70,6 +70,10 @@ function DashboardCliente() {
   });
   const [mensajePerfil, setMensajePerfil] = useState("");
 
+  const [cupones, setCupones] = useState([]);
+  const [cuponAplicado, setCuponAplicado] = useState(null);
+  const [totalConDescuento, setTotalConDescuento] = useState(0);
+
   const getToken = () => localStorage.getItem("token");
 
   const mostrarAlerta = (tipo, mensaje) => {
@@ -89,6 +93,7 @@ function DashboardCliente() {
     if (vista === "historial") cargarReservaciones();
     if (vista === "pago") cargarMetodosPago();
     if (vista === "perfil") cargarPerfil();
+    if (vista === "cupones") cargarCupones();
   }, [vista]);
 
   const cargarRutasDisponibles = async () => {
@@ -257,29 +262,34 @@ function DashboardCliente() {
     if (carrito.length === 0) { mostrarAlerta("warning", "Tu carrito está vacío."); return; }
     setModal({
       titulo: "Confirmar pago",
-      descripcion: `¿Confirmas el pago de Q${totalCarrito} con el método seleccionado? Esta acción procesará tu reservación.`,
+      descripcion: `¿Confirmas el pago de Q${cuponAplicado ? totalConDescuento : totalCarrito} con el método seleccionado? Esta acción procesará tu reservación.`,
       tipo: "primario",
       onConfirmar: () => ejecutarPago()
     });
   };
 
-  const ejecutarPago = async () => {
-    setModal(null);
-    setCargando(true);
-    try {
-      const res = await fetch("http://localhost:3000/api/pagos/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
-        body: JSON.stringify({ metodo_pago_id: metodoSeleccionado })
-      });
-      const data = await res.json();
-      if (data.success) {
-        mostrarAlerta("success", "¡Pago procesado exitosamente! Tu reservación está confirmada.");
-        cargarCarrito(); cargarMetodosPago(); cargarReservaciones();
-      } else mostrarAlerta("error", data.message);
-    } catch { mostrarAlerta("error", "Error de conexión al procesar el pago."); }
-    finally { setCargando(false); }
-  };
+const ejecutarPago = async () => {
+  setModal(null);
+  setCargando(true);
+  try {
+    const res = await fetch("http://localhost:3000/api/pagos/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+      body: JSON.stringify({ 
+        metodo_pago_id: metodoSeleccionado,
+        cupon_codigo: cuponAplicado ? cuponAplicado.codigo : null
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      mostrarAlerta("success", "Pago procesado exitosamente. Tu reservación está confirmada.");
+      setCuponAplicado(null);
+      setTotalConDescuento(0);
+      cargarCarrito(); cargarMetodosPago(); cargarReservaciones();
+    } else mostrarAlerta("error", data.message);
+  } catch { mostrarAlerta("error", "Error de conexión al procesar el pago."); }
+  finally { setCargando(false); }
+};
 
   const confirmarCancelar = (id, fechaInicio) => {
     const fechaServicio = new Date(fechaInicio);
@@ -334,6 +344,16 @@ function DashboardCliente() {
         });
       }
     } catch { console.error("Error al cargar perfil"); }
+  };
+
+  const cargarCupones = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/cliente/cupones", {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      if (data.success) setCupones(data.data);
+    } catch { console.error("Error al cargar cupones"); }
   };
 
   const guardarPerfil = () => {
@@ -568,7 +588,58 @@ function DashboardCliente() {
                 <div style={{ marginTop: "20px", padding: "16px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
                     <span style={{ fontWeight: "700", color: "var(--color-secundario)", fontSize: "18px" }}>Total:</span>
-                    <span style={{ fontWeight: "800", color: "var(--color-primario)", fontSize: "20px" }}>Q{totalCarrito}</span>
+                    <div>
+                      {cuponAplicado && (
+                        <div style={{ textAlign: "right", marginBottom: "4px" }}>
+                          <span style={{ textDecoration: "line-through", color: "var(--color-texto-mutado)", fontSize: "14px" }}>Q{totalCarrito}</span>
+                          <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: "700", color: "#166534", backgroundColor: "#DCFCE7", padding: "2px 8px", borderRadius: "20px" }}>
+                            {cuponAplicado.tipo_descuento === "porcentaje" ? `${cuponAplicado.valor_descuento}% OFF` : `Q${cuponAplicado.valor_descuento} OFF`}
+                          </span>
+                        </div>
+                      )}
+                      <span style={{ fontWeight: "800", color: "var(--color-primario)", fontSize: "20px" }}>
+                        Q{cuponAplicado ? totalConDescuento : totalCarrito}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="form-grupo">
+                    <label className="form-label-cliente">Cupón de descuento</label>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <input
+                        type="text"
+                        className="form-input-cliente"
+                        placeholder="Ingresa tu código de cupón"
+                        id="input-cupon"
+                        style={{ textTransform: "uppercase" }}
+                      />
+                      <button
+                        className="btn-secundario"
+                        style={{ whiteSpace: "nowrap" }}
+                        onClick={async () => {
+                          const codigo = document.getElementById("input-cupon").value.trim().toUpperCase();
+                          if (!codigo) { mostrarAlerta("warning", "Ingresa un código de cupón."); return; }
+                          try {
+                            const res = await fetch(`http://localhost:3000/api/cliente/cupones/validar/${codigo}`, {
+                              headers: { "Authorization": `Bearer ${getToken()}` }
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                              setCuponAplicado(data.data);
+                              const descuento = data.data.tipo_descuento === "porcentaje"
+                                ? totalCarrito * (data.data.valor_descuento / 100)
+                                : parseFloat(data.data.valor_descuento);
+                              const nuevoTotal = Math.max(0, totalCarrito - descuento).toFixed(2);
+                              setTotalConDescuento(nuevoTotal);
+                              mostrarAlerta("success", `Cupón aplicado: ${data.descuento}`);
+                            } else {
+                              mostrarAlerta("error", data.message);
+                            }
+                          } catch { mostrarAlerta("error", "Error al validar cupón."); }
+                        }}
+                      >
+                        Aplicar
+                      </button>
+                    </div>
                   </div>
                   <div className="form-grupo">
                     <label className="form-label-cliente">Método de pago</label>
@@ -723,116 +794,163 @@ function DashboardCliente() {
 
         {/* CUPONES */}
         {vista === "cupones" && (
-          <div className="cliente-card">
-            <h2 className="cliente-card-title">Mis Cupones</h2>
-            <p className="cliente-card-subtitle">Cupones recibidos de operadores y empresas de transporte.</p>
-            <div className="estado-vacio">
-              <img src={cuponesIcon} alt="Sin cupones" style={{ width: "48px", opacity: 0.3 }} />
-              <p>No tienes cupones disponibles en este momento.</p>
+          <div>
+            <div className="cliente-card">
+              <h2 className="cliente-card-title">Mis Cupones</h2>
+              <p className="cliente-card-subtitle">Cupones recibidos de operadores y empresas de transporte.</p>
+
+              {cupones.length === 0 ? (
+                <div className="estado-vacio">
+                  <img src={cuponesIcon} alt="Sin cupones" style={{ width: "48px", opacity: 0.3 }} />
+                  <p>No tienes cupones disponibles en este momento.</p>
+                </div>
+              ) : (
+                cupones.map((c) => (
+                  <div key={c.id} className="p-3 mb-3" style={{
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "var(--radio)",
+                    padding: "16px",
+                    marginBottom: "12px",
+                    backgroundColor: c.canjeado ? "var(--color-fondo)" : "var(--color-blanco)"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "8px" }}>
+                      <div>
+                        <h5 style={{ fontWeight: "800", color: "var(--color-primario)", letterSpacing: "1px", marginBottom: "2px" }}>{c.codigo}</h5>
+                        <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", margin: 0 }}>{c.descripcion}</p>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                        <span style={{
+                          fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                          padding: "3px 10px", borderRadius: "20px",
+                          backgroundColor: c.canjeado ? "#F1F5F9" : c.estado === "activo" ? "#DBEAFE" : "#FEE2E2",
+                          color: c.canjeado ? "var(--color-texto-mutado)" : c.estado === "activo" ? "#1D4ED8" : "#991B1B"
+                        }}>
+                          {c.canjeado ? "Canjeado" : c.estado}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "20px", fontSize: "13px", marginBottom: "8px" }}>
+                      <span style={{ fontWeight: "700", color: "var(--color-secundario)" }}>
+                        {c.tipo_descuento === "porcentaje" ? `${c.valor_descuento}% OFF` : `Q${c.valor_descuento} OFF`}
+                      </span>
+                      <span style={{ color: "var(--color-texto-mutado)" }}>
+                        Valido: {new Date(c.fecha_inicio).toLocaleDateString()} - {new Date(c.fecha_fin).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    {c.monto_minimo && (
+                      <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "4px" }}>
+                        Monto minimo: Q{c.monto_minimo}
+                      </p>
+                    )}
+
+                    {c.canjeado && c.fecha_canje && (
+                      <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginTop: "8px" }}>
+                        Canjeado el: {new Date(c.fecha_canje).toLocaleDateString()}
+                      </p>
+                    )}
+                    {!c.canjeado && c.estado === "activo" && (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(c.codigo);
+                          mostrarAlerta("success", `Código ${c.codigo} copiado al portapapeles.`);
+                        }}
+                        className="btn-secundario"
+                        style={{ marginTop: "8px", fontSize: "12px", padding: "6px 12px" }}
+                      >
+                        Copiar código
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
 
         {/* PERFIL */}
         {vista === "perfil" && (
-          <div className="row">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "24px" }}>
-              <div className="cliente-card text-center">
-                <div style={{
-                  width: "100px", height: "100px", borderRadius: "50%",
-                  backgroundColor: "var(--color-fondo)", border: "2px solid #E2E8F0",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  margin: "0 auto 16px auto", overflow: "hidden"
-                }}>
-                  {perfil?.foto_perfil ? (
-                    <img src={perfil.foto_perfil} alt="Foto de perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    <img src={perfilIcon} alt="Perfil" style={{ width: "48px", height: "48px", opacity: 0.4 }} />
-                  )}
-                </div>
-                <h3 style={{ fontWeight: "700", color: "var(--color-secundario)", marginBottom: "4px" }}>
-                  {perfil ? `${perfil.nombre} ${perfil.apellido}` : "Cargando..."}
-                </h3>
-                <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>{perfil?.email}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "24px" }}>
+            <div className="cliente-card text-center">
+              <div style={{
+                width: "100px", height: "100px", borderRadius: "50%",
+                backgroundColor: "var(--color-fondo)", border: "2px solid #E2E8F0",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 16px auto", overflow: "hidden"
+              }}>
+                {perfil?.foto_perfil ? (
+                  <img src={perfil.foto_perfil} alt="Foto de perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <img src={perfilIcon} alt="Perfil" style={{ width: "48px", height: "48px", opacity: 0.4 }} />
+                )}
+              </div>
+              <h3 style={{ fontWeight: "700", color: "var(--color-secundario)", marginBottom: "4px" }}>
+                {perfil ? `${perfil.nombre} ${perfil.apellido}` : "Cargando..."}
+              </h3>
+              <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>{perfil?.email}</p>
 
-                <div style={{ marginTop: "20px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
-                  <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Telefono</p>
-                  <p style={{ fontWeight: "600", color: "var(--color-secundario)" }}>{perfil?.telefono || "No registrado"}</p>
-                </div>
-
-                <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
-                  <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Direccion de origen</p>
-                  <p style={{ fontWeight: "600", color: "var(--color-secundario)", fontSize: "13px" }}>{perfil?.direccion_origen || "No registrada"}</p>
-                </div>
+              <div style={{ marginTop: "20px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
+                <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Telefono</p>
+                <p style={{ fontWeight: "600", color: "var(--color-secundario)" }}>{perfil?.telefono || "No registrado"}</p>
               </div>
 
-              <div className="cliente-card">
-                <h2 className="cliente-card-title">Editar Perfil</h2>
-                <p className="cliente-card-subtitle">El correo electronico no puede modificarse.</p>
-
-                <div style={{ padding: "12px 16px", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "var(--radio)", marginBottom: "20px" }}>
-                  <p style={{ fontSize: "13px", color: "#1D4ED8", margin: 0 }}>
-                    Correo: <strong>{perfil?.email}</strong>
-                  </p>
-                </div>
-
-                <div className="form-grupo">
-                  <label className="form-label-cliente">Nombre *</label>
-                  <input
-                    type="text"
-                    className="form-input-cliente"
-                    value={formPerfil.nombre}
-                    onChange={e => setFormPerfil({ ...formPerfil, nombre: e.target.value })}
-                    placeholder="Tu nombre"
-                  />
-                </div>
-
-                <div className="form-grupo">
-                  <label className="form-label-cliente">Apellido *</label>
-                  <input
-                    type="text"
-                    className="form-input-cliente"
-                    value={formPerfil.apellido}
-                    onChange={e => setFormPerfil({ ...formPerfil, apellido: e.target.value })}
-                    placeholder="Tu apellido"
-                  />
-                </div>
-
-                <div className="form-grupo">
-                  <label className="form-label-cliente">Telefono *</label>
-                  <input
-                    type="text"
-                    className="form-input-cliente"
-                    value={formPerfil.telefono}
-                    onChange={e => {
-                      const valor = e.target.value.replace(/\D/g, "");
-                      setFormPerfil({ ...formPerfil, telefono: valor });
-                    }}
-                    maxLength={8}
-                    placeholder="44445555"
-                  />
-                </div>
-
-                <div className="form-grupo">
-                  <label className="form-label-cliente">Direccion de origen</label>
-                  <input
-                    type="text"
-                    className="form-input-cliente"
-                    value={formPerfil.direccion_origen}
-                    onChange={e => setFormPerfil({ ...formPerfil, direccion_origen: e.target.value })}
-                    placeholder="Tu direccion principal"
-                  />
-                </div>
-
-                <button
-                  className="btn-primario"
-                  style={{ width: "100%", padding: "12px", fontSize: "15px" }}
-                  onClick={guardarPerfil}
-                  disabled={cargando}
-                >
-                  Guardar Cambios
-                </button>
+              <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
+                <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Direccion de origen</p>
+                <p style={{ fontWeight: "600", color: "var(--color-secundario)", fontSize: "13px" }}>{perfil?.direccion_origen || "No registrada"}</p>
               </div>
+            </div>
+
+            <div className="cliente-card">
+              <h2 className="cliente-card-title">Editar Perfil</h2>
+              <p className="cliente-card-subtitle">El correo electronico no puede modificarse.</p>
+
+              <div style={{ padding: "12px 16px", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "var(--radio)", marginBottom: "20px" }}>
+                <p style={{ fontSize: "13px", color: "#1D4ED8", margin: 0 }}>
+                  Correo: <strong>{perfil?.email}</strong>
+                </p>
+              </div>
+
+              <div className="form-grupo">
+                <label className="form-label-cliente">Nombre *</label>
+                <input type="text" className="form-input-cliente"
+                  value={formPerfil.nombre}
+                  onChange={e => setFormPerfil({ ...formPerfil, nombre: e.target.value })}
+                  placeholder="Tu nombre" />
+              </div>
+
+              <div className="form-grupo">
+                <label className="form-label-cliente">Apellido *</label>
+                <input type="text" className="form-input-cliente"
+                  value={formPerfil.apellido}
+                  onChange={e => setFormPerfil({ ...formPerfil, apellido: e.target.value })}
+                  placeholder="Tu apellido" />
+              </div>
+
+              <div className="form-grupo">
+                <label className="form-label-cliente">Telefono *</label>
+                <input type="text" className="form-input-cliente"
+                  value={formPerfil.telefono}
+                  onChange={e => {
+                    const valor = e.target.value.replace(/\D/g, "");
+                    setFormPerfil({ ...formPerfil, telefono: valor });
+                  }}
+                  maxLength={8}
+                  placeholder="44445555" />
+              </div>
+
+              <div className="form-grupo">
+                <label className="form-label-cliente">Direccion de origen</label>
+                <input type="text" className="form-input-cliente"
+                  value={formPerfil.direccion_origen}
+                  onChange={e => setFormPerfil({ ...formPerfil, direccion_origen: e.target.value })}
+                  placeholder="Tu direccion principal" />
+              </div>
+
+              <button className="btn-primario" style={{ width: "100%", padding: "12px", fontSize: "15px" }}
+                onClick={guardarPerfil} disabled={cargando}>
+                Guardar Cambios
+              </button>
             </div>
           </div>
         )}

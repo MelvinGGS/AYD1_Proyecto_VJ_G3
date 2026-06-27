@@ -55,10 +55,10 @@ const agregarMetodoPago = async (req, res) => {
         }
 
         const { rows } = await db.pool.query(query, valores);
-        res.status(201).json({ 
-            success: true, 
-            message: "Método de pago agregado con Q1,000.00 de saldo simulado.", 
-            data: rows[0] 
+        res.status(201).json({
+            success: true,
+            message: "Método de pago agregado con Q1,000.00 de saldo simulado.",
+            data: rows[0]
         });
 
     } catch (error) {
@@ -69,7 +69,7 @@ const agregarMetodoPago = async (req, res) => {
 // Funcion para procesar el pago (Checkout)
 const procesarPago = async (req, res) => {
     const clienteId = req.usuario.id;
-    const { metodo_pago_id } = req.body;
+    const { metodo_pago_id, cupon_codigo } = req.body;
 
     if (!metodo_pago_id) return res.status(400).json({ success: false, message: "Debe seleccionar un método de pago." });
 
@@ -86,7 +86,35 @@ const procesarPago = async (req, res) => {
         }
 
         // Calculamos el total a pagar sumando los subtotales de cada ítem
-        const totalPagar = carrito.rows.reduce((acc, item) => acc + parseFloat(item.subtotal), 0);
+        let totalPagar = carrito.rows.reduce((acc, item) => acc + parseFloat(item.subtotal), 0);
+
+        if (cupon_codigo) {
+            const cuponRes = await client.query(
+                `SELECT c.*, cc.id AS cc_id FROM cupones c
+     INNER JOIN cupones_clientes cc ON cc.cupon_id = c.id
+     WHERE c.codigo = $1 AND cc.cliente_id = $2 AND cc.canjeado = false AND c.estado = 'activo'`,
+                [cupon_codigo.toUpperCase(), clienteId]
+            );
+
+            if (cuponRes.rows.length > 0) {
+                const cupon = cuponRes.rows[0];
+                const descuento = cupon.tipo_descuento === "porcentaje"
+                    ? totalPagar * (parseFloat(cupon.valor_descuento) / 100)
+                    : parseFloat(cupon.valor_descuento);
+                totalPagar = Math.max(0, totalPagar - descuento);
+
+                await client.query(
+                    `UPDATE cupones_clientes SET canjeado = true, fecha_canje = NOW()
+       WHERE id = $1`,
+                    [cupon.cc_id]
+                );
+
+                await client.query(
+                    `UPDATE cupones SET usos_actuales = usos_actuales + 1 WHERE id = $1`,
+                    [cupon.id]
+                );
+            }
+        }
 
         // C. Verificar saldo simulado
         const metodo = await client.query("SELECT id, saldo FROM metodos_pago WHERE id = $1 AND cliente_id = $2 AND activo = TRUE", [metodo_pago_id, clienteId]);
@@ -109,7 +137,7 @@ const procesarPago = async (req, res) => {
             // Regla de negocio: 20% comisión envíos, 10% transporte
             const comisionPorcentaje = item.tipo_servicio === 'envio' ? 0.20 : 0.10;
             const gananciaPorcentaje = item.tipo_servicio === 'envio' ? 0.80 : 0.90;
-            
+
             const comision = (parseFloat(item.subtotal) * comisionPorcentaje).toFixed(2);
             const ganancia = (parseFloat(item.subtotal) * gananciaPorcentaje).toFixed(2);
 
@@ -125,7 +153,7 @@ const procesarPago = async (req, res) => {
 
             const reservaId = resReserva.rows[0].id;
             const referencia = `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-            
+
             await client.query(`
                 INSERT INTO pagos (reservacion_id, cliente_id, metodo_pago_id, monto, estado, referencia)
                 VALUES ($1, $2, $3, $4, 'completado', $5)
@@ -181,9 +209,9 @@ const cancelarReservacion = async (req, res) => {
 
         if (diferenciaHoras < 24) {
             await client.query("ROLLBACK");
-            return res.status(400).json({ 
-                success: false, 
-                message: "Política de cancelación: Solo se permite cancelar con al menos 24 horas de anticipación a la fecha del servicio." 
+            return res.status(400).json({
+                success: false,
+                message: "Política de cancelación: Solo se permite cancelar con al menos 24 horas de anticipación a la fecha del servicio."
             });
         }
 
