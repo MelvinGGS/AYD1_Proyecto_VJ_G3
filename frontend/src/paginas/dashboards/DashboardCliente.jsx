@@ -736,116 +736,151 @@ function DashboardCliente() {
 
         {/* CUPONES */}
         {vista === "cupones" && (
-          <div className="cliente-card">
-            <h2 className="cliente-card-title">Mis Cupones</h2>
-            <p className="cliente-card-subtitle">Cupones recibidos de operadores y empresas de transporte.</p>
-            <div className="estado-vacio">
-              <img src={cuponesIcon} alt="Sin cupones" style={{ width: "48px", opacity: 0.3 }} />
-              <p>No tienes cupones disponibles en este momento.</p>
+          <div>
+            <div className="cliente-card">
+              <h2 className="cliente-card-title">Mis Cupones</h2>
+              <p className="cliente-card-subtitle">Cupones recibidos de operadores y empresas de transporte.</p>
+
+              {cupones.length === 0 ? (
+                <div className="estado-vacio">
+                  <img src={cuponesIcon} alt="Sin cupones" style={{ width: "48px", opacity: 0.3 }} />
+                  <p>No tienes cupones disponibles en este momento.</p>
+                </div>
+              ) : (
+                cupones.map((c) => (
+                  <div key={c.id} className="p-3 mb-3" style={{
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "var(--radio)",
+                    padding: "16px",
+                    marginBottom: "12px",
+                    backgroundColor: c.canjeado ? "var(--color-fondo)" : "var(--color-blanco)"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "8px" }}>
+                      <div>
+                        <h5 style={{ fontWeight: "800", color: "var(--color-primario)", letterSpacing: "1px", marginBottom: "2px" }}>{c.codigo}</h5>
+                        <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", margin: 0 }}>{c.descripcion}</p>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                        <span style={{
+                          fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                          padding: "3px 10px", borderRadius: "20px",
+                          backgroundColor: c.canjeado ? "#F1F5F9" : c.estado === "activo" ? "#DBEAFE" : "#FEE2E2",
+                          color: c.canjeado ? "var(--color-texto-mutado)" : c.estado === "activo" ? "#1D4ED8" : "#991B1B"
+                        }}>
+                          {c.canjeado ? "Canjeado" : c.estado}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "20px", fontSize: "13px", marginBottom: "8px" }}>
+                      <span style={{ fontWeight: "700", color: "var(--color-secundario)" }}>
+                        {c.tipo_descuento === "porcentaje" ? `${c.valor_descuento}% OFF` : `Q${c.valor_descuento} OFF`}
+                      </span>
+                      <span style={{ color: "var(--color-texto-mutado)" }}>
+                        Valido: {new Date(c.fecha_inicio).toLocaleDateString()} - {new Date(c.fecha_fin).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    {c.monto_minimo && (
+                      <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "4px" }}>
+                        Monto minimo: Q{c.monto_minimo}
+                      </p>
+                    )}
+
+                    {c.canjeado && c.fecha_canje && (
+                      <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginTop: "8px" }}>
+                        Canjeado el: {new Date(c.fecha_canje).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
 
         {/* PERFIL */}
         {vista === "perfil" && (
-          <div className="row">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "24px" }}>
-              <div className="cliente-card text-center">
-                <div style={{
-                  width: "100px", height: "100px", borderRadius: "50%",
-                  backgroundColor: "var(--color-fondo)", border: "2px solid #E2E8F0",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  margin: "0 auto 16px auto", overflow: "hidden"
-                }}>
-                  {perfil?.foto_perfil ? (
-                    <img src={perfil.foto_perfil} alt="Foto de perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    <img src={perfilIcon} alt="Perfil" style={{ width: "48px", height: "48px", opacity: 0.4 }} />
-                  )}
-                </div>
-                <h3 style={{ fontWeight: "700", color: "var(--color-secundario)", marginBottom: "4px" }}>
-                  {perfil ? `${perfil.nombre} ${perfil.apellido}` : "Cargando..."}
-                </h3>
-                <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>{perfil?.email}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "24px" }}>
+            <div className="cliente-card text-center">
+              <div style={{
+                width: "100px", height: "100px", borderRadius: "50%",
+                backgroundColor: "var(--color-fondo)", border: "2px solid #E2E8F0",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 16px auto", overflow: "hidden"
+              }}>
+                {perfil?.foto_perfil ? (
+                  <img src={perfil.foto_perfil} alt="Foto de perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <img src={perfilIcon} alt="Perfil" style={{ width: "48px", height: "48px", opacity: 0.4 }} />
+                )}
+              </div>
+              <h3 style={{ fontWeight: "700", color: "var(--color-secundario)", marginBottom: "4px" }}>
+                {perfil ? `${perfil.nombre} ${perfil.apellido}` : "Cargando..."}
+              </h3>
+              <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>{perfil?.email}</p>
 
-                <div style={{ marginTop: "20px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
-                  <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Telefono</p>
-                  <p style={{ fontWeight: "600", color: "var(--color-secundario)" }}>{perfil?.telefono || "No registrado"}</p>
-                </div>
-
-                <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
-                  <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Direccion de origen</p>
-                  <p style={{ fontWeight: "600", color: "var(--color-secundario)", fontSize: "13px" }}>{perfil?.direccion_origen || "No registrada"}</p>
-                </div>
+              <div style={{ marginTop: "20px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
+                <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Telefono</p>
+                <p style={{ fontWeight: "600", color: "var(--color-secundario)" }}>{perfil?.telefono || "No registrado"}</p>
               </div>
 
-              <div className="cliente-card">
-                <h2 className="cliente-card-title">Editar Perfil</h2>
-                <p className="cliente-card-subtitle">El correo electronico no puede modificarse.</p>
-
-                <div style={{ padding: "12px 16px", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "var(--radio)", marginBottom: "20px" }}>
-                  <p style={{ fontSize: "13px", color: "#1D4ED8", margin: 0 }}>
-                    Correo: <strong>{perfil?.email}</strong>
-                  </p>
-                </div>
-
-                <div className="form-grupo">
-                  <label className="form-label-cliente">Nombre *</label>
-                  <input
-                    type="text"
-                    className="form-input-cliente"
-                    value={formPerfil.nombre}
-                    onChange={e => setFormPerfil({ ...formPerfil, nombre: e.target.value })}
-                    placeholder="Tu nombre"
-                  />
-                </div>
-
-                <div className="form-grupo">
-                  <label className="form-label-cliente">Apellido *</label>
-                  <input
-                    type="text"
-                    className="form-input-cliente"
-                    value={formPerfil.apellido}
-                    onChange={e => setFormPerfil({ ...formPerfil, apellido: e.target.value })}
-                    placeholder="Tu apellido"
-                  />
-                </div>
-
-                <div className="form-grupo">
-                  <label className="form-label-cliente">Telefono *</label>
-                  <input
-                    type="text"
-                    className="form-input-cliente"
-                    value={formPerfil.telefono}
-                    onChange={e => {
-                      const valor = e.target.value.replace(/\D/g, "");
-                      setFormPerfil({ ...formPerfil, telefono: valor });
-                    }}
-                    maxLength={8}
-                    placeholder="44445555"
-                  />
-                </div>
-
-                <div className="form-grupo">
-                  <label className="form-label-cliente">Direccion de origen</label>
-                  <input
-                    type="text"
-                    className="form-input-cliente"
-                    value={formPerfil.direccion_origen}
-                    onChange={e => setFormPerfil({ ...formPerfil, direccion_origen: e.target.value })}
-                    placeholder="Tu direccion principal"
-                  />
-                </div>
-
-                <button
-                  className="btn-primario"
-                  style={{ width: "100%", padding: "12px", fontSize: "15px" }}
-                  onClick={guardarPerfil}
-                  disabled={cargando}
-                >
-                  Guardar Cambios
-                </button>
+              <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
+                <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Direccion de origen</p>
+                <p style={{ fontWeight: "600", color: "var(--color-secundario)", fontSize: "13px" }}>{perfil?.direccion_origen || "No registrada"}</p>
               </div>
+            </div>
+
+            <div className="cliente-card">
+              <h2 className="cliente-card-title">Editar Perfil</h2>
+              <p className="cliente-card-subtitle">El correo electronico no puede modificarse.</p>
+
+              <div style={{ padding: "12px 16px", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "var(--radio)", marginBottom: "20px" }}>
+                <p style={{ fontSize: "13px", color: "#1D4ED8", margin: 0 }}>
+                  Correo: <strong>{perfil?.email}</strong>
+                </p>
+              </div>
+
+              <div className="form-grupo">
+                <label className="form-label-cliente">Nombre *</label>
+                <input type="text" className="form-input-cliente"
+                  value={formPerfil.nombre}
+                  onChange={e => setFormPerfil({ ...formPerfil, nombre: e.target.value })}
+                  placeholder="Tu nombre" />
+              </div>
+
+              <div className="form-grupo">
+                <label className="form-label-cliente">Apellido *</label>
+                <input type="text" className="form-input-cliente"
+                  value={formPerfil.apellido}
+                  onChange={e => setFormPerfil({ ...formPerfil, apellido: e.target.value })}
+                  placeholder="Tu apellido" />
+              </div>
+
+              <div className="form-grupo">
+                <label className="form-label-cliente">Telefono *</label>
+                <input type="text" className="form-input-cliente"
+                  value={formPerfil.telefono}
+                  onChange={e => {
+                    const valor = e.target.value.replace(/\D/g, "");
+                    setFormPerfil({ ...formPerfil, telefono: valor });
+                  }}
+                  maxLength={8}
+                  placeholder="44445555" />
+              </div>
+
+              <div className="form-grupo">
+                <label className="form-label-cliente">Direccion de origen</label>
+                <input type="text" className="form-input-cliente"
+                  value={formPerfil.direccion_origen}
+                  onChange={e => setFormPerfil({ ...formPerfil, direccion_origen: e.target.value })}
+                  placeholder="Tu direccion principal" />
+              </div>
+
+              <button className="btn-primario" style={{ width: "100%", padding: "12px", fontSize: "15px" }}
+                onClick={guardarPerfil} disabled={cargando}>
+                Guardar Cambios
+              </button>
             </div>
           </div>
         )}

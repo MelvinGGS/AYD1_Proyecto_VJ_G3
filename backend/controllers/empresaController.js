@@ -162,13 +162,28 @@ const enviarCuponPorCorreo = async (req, res) => {
             `¡Tienes un cupón de descuento! - TrackFlow-HUB`,
             "Cupón de Descuento",
             `Hemos recibido un cupón especial para ti. Usa el siguiente código al momento de realizar tu reservación:
-      <br><br>
-      <b>Código:</b> ${cupon.codigo}<br>
-      <b>Descuento:</b> ${cupon.tipo_descuento === "porcentaje" ? `${cupon.valor_descuento}%` : `Q${cupon.valor_descuento}`}<br>
-      <b>Válido hasta:</b> ${new Date(cupon.fecha_fin).toLocaleDateString()}<br>
-      ${cupon.descripcion ? `<b>Descripción:</b> ${cupon.descripcion}` : ""}`,
+  <br><br>
+  <b>Código:</b> ${cupon.codigo}<br>
+  <b>Descuento:</b> ${cupon.tipo_descuento === "porcentaje" ? `${cupon.valor_descuento}%` : `Q${cupon.valor_descuento}`}<br>
+  <b>Válido hasta:</b> ${new Date(cupon.fecha_fin).toLocaleDateString()}<br>
+  ${cupon.descripcion ? `<b>Descripción:</b> ${cupon.descripcion}` : ""}`,
             cupon.codigo
         );
+
+        const clienteRes = await db.pool.query(
+            "SELECT clientes.id FROM clientes INNER JOIN usuarios u ON u.id = clientes.id WHERE u.email = $1",
+            [correo_cliente]
+        );
+
+        if (clienteRes.rows.length > 0) {
+            const clienteId = clienteRes.rows[0].id;
+            await db.pool.query(
+                `INSERT INTO cupones_clientes (cupon_id, cliente_id)
+     VALUES ($1, $2)
+     ON CONFLICT (cupon_id, cliente_id) DO NOTHING`,
+                [id, clienteId]
+            );
+        }
 
         res.json({ success: true, message: `Cupón enviado exitosamente a ${correo_cliente}.` });
     } catch (error) {
