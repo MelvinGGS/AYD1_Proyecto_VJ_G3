@@ -8,5 +8,6 @@ router.use(verificarAutenticado);
 router.get("/perfil", clienteController.obtenerPerfil);
 router.put("/perfil", clienteController.editarPerfil);
 router.get("/cupones", clienteController.listarCupones);
+router.get("/cupones/validar/:codigo", clienteController.validarCupon);
 
 module.exports = router;

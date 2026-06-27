@@ -71,6 +71,8 @@ function DashboardCliente() {
   const [mensajePerfil, setMensajePerfil] = useState("");
 
   const [cupones, setCupones] = useState([]);
+  const [cuponAplicado, setCuponAplicado] = useState(null);
+  const [totalConDescuento, setTotalConDescuento] = useState(0);
 
   const getToken = () => localStorage.getItem("token");
 
@@ -260,29 +262,34 @@ function DashboardCliente() {
     if (carrito.length === 0) { mostrarAlerta("warning", "Tu carrito está vacío."); return; }
     setModal({
       titulo: "Confirmar pago",
-      descripcion: `¿Confirmas el pago de Q${totalCarrito} con el método seleccionado? Esta acción procesará tu reservación.`,
+      descripcion: `¿Confirmas el pago de Q${cuponAplicado ? totalConDescuento : totalCarrito} con el método seleccionado? Esta acción procesará tu reservación.`,
       tipo: "primario",
       onConfirmar: () => ejecutarPago()
     });
   };
 
-  const ejecutarPago = async () => {
-    setModal(null);
-    setCargando(true);
-    try {
-      const res = await fetch("http://localhost:3000/api/pagos/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
-        body: JSON.stringify({ metodo_pago_id: metodoSeleccionado })
-      });
-      const data = await res.json();
-      if (data.success) {
-        mostrarAlerta("success", "¡Pago procesado exitosamente! Tu reservación está confirmada.");
-        cargarCarrito(); cargarMetodosPago(); cargarReservaciones();
-      } else mostrarAlerta("error", data.message);
-    } catch { mostrarAlerta("error", "Error de conexión al procesar el pago."); }
-    finally { setCargando(false); }
-  };
+const ejecutarPago = async () => {
+  setModal(null);
+  setCargando(true);
+  try {
+    const res = await fetch("http://localhost:3000/api/pagos/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+      body: JSON.stringify({ 
+        metodo_pago_id: metodoSeleccionado,
+        cupon_codigo: cuponAplicado ? cuponAplicado.codigo : null
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      mostrarAlerta("success", "Pago procesado exitosamente. Tu reservación está confirmada.");
+      setCuponAplicado(null);
+      setTotalConDescuento(0);
+      cargarCarrito(); cargarMetodosPago(); cargarReservaciones();
+    } else mostrarAlerta("error", data.message);
+  } catch { mostrarAlerta("error", "Error de conexión al procesar el pago."); }
+  finally { setCargando(false); }
+};
 
   const confirmarCancelar = (id, fechaInicio) => {
     const fechaServicio = new Date(fechaInicio);
@@ -581,7 +588,58 @@ function DashboardCliente() {
                 <div style={{ marginTop: "20px", padding: "16px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
                     <span style={{ fontWeight: "700", color: "var(--color-secundario)", fontSize: "18px" }}>Total:</span>
-                    <span style={{ fontWeight: "800", color: "var(--color-primario)", fontSize: "20px" }}>Q{totalCarrito}</span>
+                    <div>
+                      {cuponAplicado && (
+                        <div style={{ textAlign: "right", marginBottom: "4px" }}>
+                          <span style={{ textDecoration: "line-through", color: "var(--color-texto-mutado)", fontSize: "14px" }}>Q{totalCarrito}</span>
+                          <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: "700", color: "#166534", backgroundColor: "#DCFCE7", padding: "2px 8px", borderRadius: "20px" }}>
+                            {cuponAplicado.tipo_descuento === "porcentaje" ? `${cuponAplicado.valor_descuento}% OFF` : `Q${cuponAplicado.valor_descuento} OFF`}
+                          </span>
+                        </div>
+                      )}
+                      <span style={{ fontWeight: "800", color: "var(--color-primario)", fontSize: "20px" }}>
+                        Q{cuponAplicado ? totalConDescuento : totalCarrito}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="form-grupo">
+                    <label className="form-label-cliente">Cupón de descuento</label>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <input
+                        type="text"
+                        className="form-input-cliente"
+                        placeholder="Ingresa tu código de cupón"
+                        id="input-cupon"
+                        style={{ textTransform: "uppercase" }}
+                      />
+                      <button
+                        className="btn-secundario"
+                        style={{ whiteSpace: "nowrap" }}
+                        onClick={async () => {
+                          const codigo = document.getElementById("input-cupon").value.trim().toUpperCase();
+                          if (!codigo) { mostrarAlerta("warning", "Ingresa un código de cupón."); return; }
+                          try {
+                            const res = await fetch(`http://localhost:3000/api/cliente/cupones/validar/${codigo}`, {
+                              headers: { "Authorization": `Bearer ${getToken()}` }
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                              setCuponAplicado(data.data);
+                              const descuento = data.data.tipo_descuento === "porcentaje"
+                                ? totalCarrito * (data.data.valor_descuento / 100)
+                                : parseFloat(data.data.valor_descuento);
+                              const nuevoTotal = Math.max(0, totalCarrito - descuento).toFixed(2);
+                              setTotalConDescuento(nuevoTotal);
+                              mostrarAlerta("success", `Cupón aplicado: ${data.descuento}`);
+                            } else {
+                              mostrarAlerta("error", data.message);
+                            }
+                          } catch { mostrarAlerta("error", "Error al validar cupón."); }
+                        }}
+                      >
+                        Aplicar
+                      </button>
+                    </div>
                   </div>
                   <div className="form-grupo">
                     <label className="form-label-cliente">Método de pago</label>
@@ -791,6 +849,18 @@ function DashboardCliente() {
                       <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginTop: "8px" }}>
                         Canjeado el: {new Date(c.fecha_canje).toLocaleDateString()}
                       </p>
+                    )}
+                    {!c.canjeado && c.estado === "activo" && (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(c.codigo);
+                          mostrarAlerta("success", `Código ${c.codigo} copiado al portapapeles.`);
+                        }}
+                        className="btn-secundario"
+                        style={{ marginTop: "8px", fontSize: "12px", padding: "6px 12px" }}
+                      >
+                        Copiar código
+                      </button>
                     )}
                   </div>
                 ))

@@ -71,4 +71,50 @@ const listarCupones = async (req, res) => {
   }
 };
 
-module.exports = { obtenerPerfil, editarPerfil, listarCupones};
+const validarCupon = async (req, res) => {
+  const clienteId = req.usuario.id;
+  const { codigo } = req.params;
+
+  try {
+    const { rows } = await db.pool.query(
+      `SELECT 
+        c.id, c.codigo, c.tipo_descuento, c.valor_descuento,
+        c.fecha_inicio, c.fecha_fin, c.estado, c.monto_minimo,
+        cc.canjeado
+       FROM cupones c
+       INNER JOIN cupones_clientes cc ON cc.cupon_id = c.id
+       WHERE c.codigo = $1 AND cc.cliente_id = $2`,
+      [codigo.toUpperCase(), clienteId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Cupón no encontrado o no asignado a tu cuenta." });
+    }
+
+    const cupon = rows[0];
+
+    if (cupon.canjeado) {
+      return res.status(400).json({ success: false, message: "Este cupón ya fue canjeado." });
+    }
+
+    if (cupon.estado !== "activo") {
+      return res.status(400).json({ success: false, message: "Este cupón no está activo." });
+    }
+
+    const hoy = new Date();
+    if (hoy < new Date(cupon.fecha_inicio) || hoy > new Date(cupon.fecha_fin)) {
+      return res.status(400).json({ success: false, message: "Este cupón está fuera de su fecha de vigencia." });
+    }
+
+    const descuento = cupon.tipo_descuento === "porcentaje"
+      ? `${cupon.valor_descuento}% de descuento`
+      : `Q${cupon.valor_descuento} de descuento`;
+
+    res.json({ success: true, data: cupon, descuento, message: `Cupón válido: ${descuento}` });
+  } catch (error) {
+    console.error("Error al validar cupón:", error);
+    res.status(500).json({ success: false, message: "Error al validar cupón.", error: { details: error.message } });
+  }
+};
+
+module.exports = { obtenerPerfil, editarPerfil, listarCupones, validarCupon};
