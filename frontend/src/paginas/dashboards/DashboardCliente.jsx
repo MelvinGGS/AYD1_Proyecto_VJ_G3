@@ -64,6 +64,12 @@ function DashboardCliente() {
   const [erroresTarjeta, setErroresTarjeta] = useState({});
   const [walletId, setWalletId] = useState("");
 
+  const [perfil, setPerfil] = useState(null);
+  const [formPerfil, setFormPerfil] = useState({
+    nombre: "", apellido: "", telefono: "", direccion_origen: ""
+  });
+  const [mensajePerfil, setMensajePerfil] = useState("");
+
   const getToken = () => localStorage.getItem("token");
 
   const mostrarAlerta = (tipo, mensaje) => {
@@ -82,6 +88,7 @@ function DashboardCliente() {
     if (vista === "carrito") cargarCarrito();
     if (vista === "historial") cargarReservaciones();
     if (vista === "pago") cargarMetodosPago();
+    if (vista === "perfil") cargarPerfil();
   }, [vista]);
 
   const cargarRutasDisponibles = async () => {
@@ -311,6 +318,57 @@ function DashboardCliente() {
     navigate("/");
   };
 
+  const cargarPerfil = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/cliente/perfil", {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPerfil(data.data);
+        setFormPerfil({
+          nombre: data.data.nombre || "",
+          apellido: data.data.apellido || "",
+          telefono: data.data.telefono || "",
+          direccion_origen: data.data.direccion_origen || ""
+        });
+      }
+    } catch { console.error("Error al cargar perfil"); }
+  };
+
+  const guardarPerfil = () => {
+    if (!formPerfil.nombre || !formPerfil.apellido || !formPerfil.telefono) {
+      mostrarAlerta("warning", "Nombre, apellido y teléfono son requeridos.");
+      return;
+    }
+    setModal({
+      titulo: "Confirmar cambios de perfil",
+      descripcion: "¿Estas seguro que deseas guardar los cambios en tu perfil?",
+      tipo: "primario",
+      onConfirmar: () => ejecutarGuardarPerfil()
+    });
+  };
+
+  const ejecutarGuardarPerfil = async () => {
+    setModal(null);
+    setCargando(true);
+    try {
+      const res = await fetch("http://localhost:3000/api/cliente/perfil", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(formPerfil)
+      });
+      const data = await res.json();
+      if (data.success) {
+        mostrarAlerta("success", data.message);
+        cargarPerfil();
+      } else mostrarAlerta("error", data.message);
+    } catch { mostrarAlerta("error", "Error al guardar perfil."); }
+    finally { setCargando(false); }
+  };
   const getBadgeClass = (estado) => {
     const clases = { confirmado: "badge-confirmado", cancelado: "badge-cancelado", pendiente_pago: "badge-pendiente", en_transito: "badge-en_transito", entregado: "badge-entregado" };
     return `badge-estado ${clases[estado] || "badge-pendiente"}`;
@@ -677,12 +735,104 @@ function DashboardCliente() {
 
         {/* PERFIL */}
         {vista === "perfil" && (
-          <div className="cliente-card">
-            <h2 className="cliente-card-title">Mi Perfil</h2>
-            <p className="cliente-card-subtitle">Información de tu cuenta en TrackFlow-HUB.</p>
-            <div className="estado-vacio">
-              <img src={perfilIcon} alt="Perfil" style={{ width: "48px", opacity: 0.3 }} />
-              <p>Módulo de perfil disponible próximamente.</p>
+          <div className="row">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "24px" }}>
+              <div className="cliente-card text-center">
+                <div style={{
+                  width: "100px", height: "100px", borderRadius: "50%",
+                  backgroundColor: "var(--color-fondo)", border: "2px solid #E2E8F0",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  margin: "0 auto 16px auto", overflow: "hidden"
+                }}>
+                  {perfil?.foto_perfil ? (
+                    <img src={perfil.foto_perfil} alt="Foto de perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <img src={perfilIcon} alt="Perfil" style={{ width: "48px", height: "48px", opacity: 0.4 }} />
+                  )}
+                </div>
+                <h3 style={{ fontWeight: "700", color: "var(--color-secundario)", marginBottom: "4px" }}>
+                  {perfil ? `${perfil.nombre} ${perfil.apellido}` : "Cargando..."}
+                </h3>
+                <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>{perfil?.email}</p>
+
+                <div style={{ marginTop: "20px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
+                  <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Telefono</p>
+                  <p style={{ fontWeight: "600", color: "var(--color-secundario)" }}>{perfil?.telefono || "No registrado"}</p>
+                </div>
+
+                <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "var(--color-fondo)", borderRadius: "var(--radio)" }}>
+                  <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Direccion de origen</p>
+                  <p style={{ fontWeight: "600", color: "var(--color-secundario)", fontSize: "13px" }}>{perfil?.direccion_origen || "No registrada"}</p>
+                </div>
+              </div>
+
+              <div className="cliente-card">
+                <h2 className="cliente-card-title">Editar Perfil</h2>
+                <p className="cliente-card-subtitle">El correo electronico no puede modificarse.</p>
+
+                <div style={{ padding: "12px 16px", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "var(--radio)", marginBottom: "20px" }}>
+                  <p style={{ fontSize: "13px", color: "#1D4ED8", margin: 0 }}>
+                    Correo: <strong>{perfil?.email}</strong>
+                  </p>
+                </div>
+
+                <div className="form-grupo">
+                  <label className="form-label-cliente">Nombre *</label>
+                  <input
+                    type="text"
+                    className="form-input-cliente"
+                    value={formPerfil.nombre}
+                    onChange={e => setFormPerfil({ ...formPerfil, nombre: e.target.value })}
+                    placeholder="Tu nombre"
+                  />
+                </div>
+
+                <div className="form-grupo">
+                  <label className="form-label-cliente">Apellido *</label>
+                  <input
+                    type="text"
+                    className="form-input-cliente"
+                    value={formPerfil.apellido}
+                    onChange={e => setFormPerfil({ ...formPerfil, apellido: e.target.value })}
+                    placeholder="Tu apellido"
+                  />
+                </div>
+
+                <div className="form-grupo">
+                  <label className="form-label-cliente">Telefono *</label>
+                  <input
+                    type="text"
+                    className="form-input-cliente"
+                    value={formPerfil.telefono}
+                    onChange={e => {
+                      const valor = e.target.value.replace(/\D/g, "");
+                      setFormPerfil({ ...formPerfil, telefono: valor });
+                    }}
+                    maxLength={8}
+                    placeholder="44445555"
+                  />
+                </div>
+
+                <div className="form-grupo">
+                  <label className="form-label-cliente">Direccion de origen</label>
+                  <input
+                    type="text"
+                    className="form-input-cliente"
+                    value={formPerfil.direccion_origen}
+                    onChange={e => setFormPerfil({ ...formPerfil, direccion_origen: e.target.value })}
+                    placeholder="Tu direccion principal"
+                  />
+                </div>
+
+                <button
+                  className="btn-primario"
+                  style={{ width: "100%", padding: "12px", fontSize: "15px" }}
+                  onClick={guardarPerfil}
+                  disabled={cargando}
+                >
+                  Guardar Cambios
+                </button>
+              </div>
             </div>
           </div>
         )}
