@@ -70,6 +70,8 @@ function DashboardCliente() {
   });
   const [mensajePerfil, setMensajePerfil] = useState("");
 
+  const [cupones, setCupones] = useState([]);
+
   const getToken = () => localStorage.getItem("token");
 
   const mostrarAlerta = (tipo, mensaje) => {
@@ -89,6 +91,7 @@ function DashboardCliente() {
     if (vista === "historial") cargarReservaciones();
     if (vista === "pago") cargarMetodosPago();
     if (vista === "perfil") cargarPerfil();
+    if (vista === "cupones") cargarCupones();
   }, [vista]);
 
   const cargarRutasDisponibles = async () => {
@@ -334,6 +337,16 @@ function DashboardCliente() {
         });
       }
     } catch { console.error("Error al cargar perfil"); }
+  };
+
+  const cargarCupones = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/cliente/cupones", {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      if (data.success) setCupones(data.data);
+    } catch { console.error("Error al cargar cupones"); }
   };
 
   const guardarPerfil = () => {

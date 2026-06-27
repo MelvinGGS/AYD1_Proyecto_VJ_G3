@@ -7,5 +7,6 @@ router.use(verificarAutenticado);
 
 router.get("/perfil", clienteController.obtenerPerfil);
 router.put("/perfil", clienteController.editarPerfil);
+router.get("/cupones", clienteController.listarCupones);
 
 module.exports = router;

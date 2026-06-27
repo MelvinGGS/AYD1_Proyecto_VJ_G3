@@ -40,4 +40,35 @@ const editarPerfil = async (req, res) => {
   }
 };
 
-module.exports = { obtenerPerfil, editarPerfil };
+const listarCupones = async (req, res) => {
+  const clienteId = req.usuario.id;
+  try {
+    const { rows } = await db.pool.query(
+      `SELECT 
+        cc.id,
+        cc.canjeado,
+        cc.fecha_canje,
+        cc.created_at,
+        c.codigo,
+        c.descripcion,
+        c.tipo_descuento,
+        c.valor_descuento,
+        c.fecha_inicio,
+        c.fecha_fin,
+        c.estado,
+        c.monto_minimo,
+        c.uso_por_cliente
+       FROM cupones_clientes cc
+       INNER JOIN cupones c ON c.id = cc.cupon_id
+       WHERE cc.cliente_id = $1
+       ORDER BY cc.created_at DESC`,
+      [clienteId]
+    );
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error("Error al listar cupones:", error);
+    res.status(500).json({ success: false, message: "Error al obtener cupones.", error: { details: error.message } });
+  }
+};
+
+module.exports = { obtenerPerfil, editarPerfil, listarCupones};
