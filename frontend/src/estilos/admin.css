@@ -220,27 +220,28 @@
 
 .admin-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 1300px;
   border-collapse: collapse;
 }
 
 .admin-table th {
   background: #f8fafc;
   color: #475569;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   text-align: left;
-  letter-spacing: 0.02em;
-  padding: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  letter-spacing: 0.03em;
+  padding: 16px 20px;
+  border-bottom: 2px solid #cbd5e1;
   white-space: nowrap;
 }
 
 .admin-table td {
-  vertical-align: top;
-  padding: 12px;
+  vertical-align: middle;
+  padding: 16px 20px;
   border-bottom: 1px solid #edf2f7;
   color: var(--color-secundario);
+  font-size: 0.95rem;
 }
 
 .admin-table tr:last-child td {
