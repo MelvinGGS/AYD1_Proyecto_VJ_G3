@@ -10,6 +10,7 @@ const rutaRoutes = require('./routes/rutaRoutes');
 const empresaRoutes = require('./routes/empresaRoutes');
 const carritoRoutes = require('./routes/carritoRoutes');
 const pagoRoutes = require('./routes/pagoRoutes');
+const clienteRoutes = require('./routes/clienteRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,6 +39,9 @@ app.use('/api/carrito', carritoRoutes);
 
 // Ruta para pagos
 app.use('/api/pagos', pagoRoutes);
+
+// ruta para perfil de clientes
+app.use('/api/cliente', clienteRoutes);
 
 // Ruta de estado base del servidor (Health Check)
 app.get("/", (req, res) => {
