@@ -55,8 +55,26 @@ const obtenerReportesContraEmpresa = async (req, res) => {
     }
 };
 
+
+const actualizarEstadoReporte = async (req, res) => {
+    const { id } = req.params;
+    const { estado } = req.body;
+    
+    try {
+        await pool.query(
+            "UPDATE reportes SET estado = $1, updated_at = NOW() WHERE id = $2",
+            [estado, id]
+        );
+        res.status(200).json({ success: true, message: "Estado actualizado correctamente." });
+    } catch (error) {
+        console.error("Error al actualizar reporte:", error);
+        res.status(500).json({ success: false, message: "Error al actualizar estado." });
+    }
+};
+
 module.exports = { 
     crearReporte, 
     obtenerHistorialReportesCliente, 
-    obtenerReportesContraEmpresa 
+    obtenerReportesContraEmpresa,
+    actualizarEstadoReporte
 };

@@ -91,6 +91,28 @@ function DashboardEmpresa() {
     }
   };
 
+const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/reportes/${reporteId}/estado`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify({ estado: nuevoEstado })
+      });
+      const data = await res.json();
+      if (data.success) {
+        cargarReportes(); 
+      } else {
+        alert("Error: " + data.message);
+      }
+    } catch (error) {
+      console.error("Error al cambiar estado del reporte", error);
+    }
+  };
+
+
   const cargarReporteGanancias = async () => {
     try {
       const res = await fetch("http://localhost:3000/api/empresa/reportes/ganancias", {
@@ -961,7 +983,7 @@ function DashboardEmpresa() {
               ))}
             </div>
 
-            {/* Reportes de clientes */}
+{/* Reportes de clientes */}
             {vistaReporte === "recibidos" && (
               <div className="dashboard-card-custom">
                 <h2 className="dashboard-card-title">Reportes Recibidos de Clientes</h2>
@@ -1006,6 +1028,38 @@ function DashboardEmpresa() {
                           </a>
                         )}
                       </div>
+
+                      {/* BOTONES DE GESTIÓN DE LA EMPRESA */}
+                      <div className="d-flex gap-2 mt-3 pt-2" style={{ borderTop: "1px dashed #E2E8F0" }}>
+                        {r.estado === 'enviado' && (
+                          <button
+                            className="btn btn-sm"
+                            style={{ backgroundColor: "#FEF9C3", color: "#854D0E", border: "1px solid #FDE047", fontWeight: "600" }}
+                            onClick={() => cambiarEstadoReporte(r.id, "en_revision")}
+                          >
+                            Poner en Estudio
+                          </button>
+                        )}
+                        {(r.estado === 'enviado' || r.estado === 'en_revision') && (
+                          <>
+                            <button
+                              className="btn btn-sm"
+                              style={{ backgroundColor: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: "600" }}
+                              onClick={() => cambiarEstadoReporte(r.id, "aceptado")}
+                            >
+                              Aceptar
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              style={{ backgroundColor: "#FEE2E2", color: "#991B1B", border: "1px solid #FECACA", fontWeight: "600" }}
+                              onClick={() => cambiarEstadoReporte(r.id, "rechazado")}
+                            >
+                              Rechazar
+                            </button>
+                          </>
+                        )}
+                      </div>
+
                     </div>
                   ))
                 )}

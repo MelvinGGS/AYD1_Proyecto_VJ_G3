@@ -29,6 +29,7 @@ router.use(verificarAutenticado);
 // 3. Rutas de uso para el Cliente
 router.post("/", upload.single('evidencia'), reportesController.crearReporte);
 router.get("/cliente/:cliente_id", reportesController.obtenerHistorialReportesCliente);
+router.patch('/:id/estado', reportesController.actualizarEstadoReporte); 
 
 // 4. Rutas de uso para la Empresa de Transporte (y Operadores)
 router.get("/empresa/:empresa_id", reportesController.obtenerReportesContraEmpresa);
