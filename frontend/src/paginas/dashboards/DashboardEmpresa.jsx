@@ -1165,7 +1165,20 @@ const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
                           <div key={c.id} className="p-3 mb-2 rounded" style={{ border: "1px solid #E2E8F0" }}>
                             <div className="d-flex justify-content-between mb-1">
                               <span className="fw-bold" style={{ color: "var(--color-secundario)", fontSize: "13px" }}>{c.cliente_email}</span>
-                              <span style={{ color: "var(--color-primario)", fontWeight: "700" }}>{"⭐".repeat(c.puntuacion)}{"☆".repeat(5 - c.puntuacion)}</span>
+                              <div style={{ display: "flex", gap: "2px" }}>
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <span
+                                    key={star}
+                                    style={{
+                                      fontSize: "20px",
+                                      color: star <= c.puntuacion ? "#F59E0B" : "#E2E8F0",
+                                      lineHeight: "1"
+                                    }}
+                                  >
+                                    ★
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                             <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px" }}>{c.nombre_ruta}</p>
                             {c.comentario && <p style={{ fontSize: "13px", color: "var(--color-secundario)", margin: 0 }}>{c.comentario}</p>}
