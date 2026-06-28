@@ -262,6 +262,7 @@ const obtenerMisReservaciones = async (req, res) => {
             SELECT 
                 r.id, r.estado, r.fecha_inicio, r.precio_total, r.tipo_servicio,
                 rt.nombre_ruta AS nombre_transporte,
+                rt.empresa_id,
                 se.nombre_servicio AS nombre_envio
             FROM reservaciones r
             LEFT JOIN rutas_transporte rt ON r.ruta_transporte_id = rt.id

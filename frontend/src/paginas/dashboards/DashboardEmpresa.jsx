@@ -81,7 +81,7 @@ function DashboardEmpresa() {
 
   const cargarReportes = async () => {
     try {
-      const res = await fetch("http://localhost:3000/api/empresa/reportes", {
+      const res = await fetch(`http://localhost:3000/api/reportes/empresa/${empresaId}`, {
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
       });
       const data = await res.json();
@@ -238,7 +238,6 @@ function DashboardEmpresa() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${localStorage.getItem("token")}`
         },
-        // YA NO ENVIAMOS empresa_id AQUÍ
         body: JSON.stringify({
           tipo_servicio: "Estandar",
           ...formularioRuta
@@ -263,7 +262,6 @@ function DashboardEmpresa() {
 
     const formData = new FormData();
     formData.append("archivo_csv", archivoCSV);
-    // YA NO AGREGAMOS empresa_id AL FORMDATA
 
     try {
       const res = await fetch("http://localhost:3000/api/rutas/csv", {
@@ -294,7 +292,7 @@ function DashboardEmpresa() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${localStorage.getItem("token")}`
         },
-        // YA NO ENVIAMOS empresa_id AQUÍ
+
         body: JSON.stringify({ nuevo_estado: nuevoEstado, motivo_cancelacion: motivo })
       });
       const data = await res.json();
@@ -979,22 +977,35 @@ function DashboardEmpresa() {
                     <div key={r.id} className="p-3 mb-3 rounded" style={{ border: "1px solid #E2E8F0" }}>
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div>
-                          <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px" }}>
+                          <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px", textTransform: "uppercase", fontWeight: "700" }}>
                             Cliente: <strong>{r.cliente_email}</strong>
                           </p>
-                          <h5 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{r.motivo}</h5>
+                          <h5 className="fw-bold mb-0" style={{ color: "var(--color-secundario)", fontSize: "16px" }}>{r.motivo}</h5>
                         </div>
                         <span style={{
                           fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
-                          padding: "3px 10px", borderRadius: "20px",
+                          padding: "4px 10px", borderRadius: "20px",
                           backgroundColor: r.estado === "enviado" ? "#DBEAFE" : r.estado === "en_revision" ? "#FEF9C3" : r.estado === "aceptado" ? "#DCFCE7" : "#FEE2E2",
                           color: r.estado === "enviado" ? "#1D4ED8" : r.estado === "en_revision" ? "#854D0E" : r.estado === "aceptado" ? "#166534" : "#991B1B"
                         }}>
-                          {r.estado.replace("_", " ")}
+                          {r.estado ? r.estado.replace("_", " ") : "ENVIADO"}
                         </span>
                       </div>
-                      <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>{r.descripcion}</p>
-                      <small style={{ color: "var(--color-texto-mutado)" }}>{new Date(r.created_at).toLocaleDateString()}</small>
+                      
+                      <div style={{ backgroundColor: "#F8FAFC", padding: "12px", borderRadius: "6px", border: "1px solid #E2E8F0", marginTop: "12px", marginBottom: "12px" }}>
+                        <p style={{ fontSize: "13px", color: "var(--color-secundario)", margin: 0, fontStyle: "italic" }}>"{r.descripcion}"</p>
+                      </div>
+
+                      <div className="d-flex justify-content-between align-items-center mt-2">
+                        <small style={{ color: "var(--color-texto-mutado)", fontSize: "12px" }}>
+                          Fecha: {r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-GT', { timeZone: 'UTC' }) : 'Fecha no disponible'}
+                        </small>
+                        {r.evidencia && (
+                          <a href={`http://localhost:3000${r.evidencia}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#2563EB", textDecoration: "underline", fontWeight: "600" }}>
+                            Ver evidencia adjunta
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}

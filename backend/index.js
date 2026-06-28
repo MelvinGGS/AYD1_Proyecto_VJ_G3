@@ -11,6 +11,7 @@ const empresaRoutes = require('./routes/empresaRoutes');
 const carritoRoutes = require('./routes/carritoRoutes');
 const pagoRoutes = require('./routes/pagoRoutes');
 const clienteRoutes = require('./routes/clienteRoutes');
+const reportesRoutes = require("./routes/reportesRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,6 +43,10 @@ app.use('/api/pagos', pagoRoutes);
 
 // ruta para perfil de clientes
 app.use('/api/cliente', clienteRoutes);
+
+app.use("/api/reportes", reportesRoutes);
+app.use('/.upload', express.static(path.join(__dirname, '.upload')));
+
 
 // Ruta de estado base del servidor (Health Check)
 app.get("/", (req, res) => {

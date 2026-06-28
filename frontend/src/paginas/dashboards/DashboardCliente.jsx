@@ -51,6 +51,12 @@ function DashboardCliente() {
   const [modal, setModal] = useState(null);
   const [alerta, setAlerta] = useState(null);
 
+// ESTADOS PARA REPORTES
+  const [reportes, setReportes] = useState([]);
+  const [modalReporte, setModalReporte] = useState(null);
+  const [formReporte, setFormReporte] = useState({ motivo: "", descripcion: "", archivo: null });
+
+
   const [carrito, setCarrito] = useState([]);
   const [totalCarrito, setTotalCarrito] = useState(0);
   const [metodosPago, setMetodosPago] = useState([]);
@@ -94,6 +100,7 @@ function DashboardCliente() {
     if (vista === "pago") cargarMetodosPago();
     if (vista === "perfil") cargarPerfil();
     if (vista === "cupones") cargarCupones();
+    if (vista === "reportes") cargarReportes();
   }, [vista]);
 
   const cargarRutasDisponibles = async () => {
@@ -133,6 +140,83 @@ function DashboardCliente() {
       if (data.success) setReservaciones(data.data);
     } catch { console.error("Error al cargar reservaciones"); }
   };
+
+  const cargarReportes = async () => {
+    try {
+      const clienteId = localStorage.getItem("id");
+      const res = await fetch(`http://localhost:3000/api/reportes/cliente/${clienteId}`, {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      if (data.success) setReportes(data.data);
+    } catch { console.error("Error al cargar historial de reportes"); }
+  };
+
+  const enviarReporte = async (e) => {
+    e.preventDefault();
+    setCargando(true);
+
+    const formData = new FormData();
+    formData.append('cliente_id', localStorage.getItem("id"));
+    formData.append('proveedor_id', modalReporte.empresa_id);
+    formData.append('tipo_servicio', modalReporte.tipo_servicio);
+    formData.append('reservacion_id', modalReporte.id);
+    formData.append('motivo', formReporte.motivo);
+    formData.append('descripcion', formReporte.descripcion);
+    
+    if (formReporte.archivo) {
+      formData.append('evidencia', formReporte.archivo);
+    }
+
+    try {
+      const res = await fetch('http://localhost:3000/api/reportes', {
+        method: 'POST',
+        headers: { "Authorization": `Bearer ${getToken()}` },
+        body: formData
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        mostrarAlerta("success", "Reporte enviado para su estudio.");
+        setModalReporte(null);
+        setFormReporte({ motivo: "", descripcion: "", archivo: null });
+      } else {
+        mostrarAlerta("error", data.message);
+      }
+    } catch {
+      mostrarAlerta("error", "Error al enviar el reporte.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+const getBadgeReporte = (estadoRaw) => {
+    const estadoLimpio = estadoRaw ? String(estadoRaw).toLowerCase().trim() : 'enviado';
+    
+    const colores = {
+      'enviado': { bg: '#DBEAFE', text: '#1E40AF' },
+      'en_revision': { bg: '#FEF3C7', text: '#92400E' },
+      'aceptado': { bg: '#DCFCE7', text: '#166534' },
+      'rechazado': { bg: '#FEE2E2', text: '#991B1B' }
+    };
+
+    const color = colores[estadoLimpio] || { bg: '#DBEAFE', text: '#1E40AF' };
+
+    return (
+      <span style={{ 
+        backgroundColor: color.bg, 
+        color: color.text, 
+        padding: "4px 8px", 
+        borderRadius: "12px", 
+        fontSize: "11px", 
+        fontWeight: "bold", 
+        textTransform: "uppercase" 
+      }}>
+        {estadoLimpio.replace("_", " ")}
+      </span>
+    );
+  };
+
 
   const validarLuhn = (numero) => {
     const digitos = numero.replace(/\D/g, '');
@@ -401,6 +485,7 @@ const ejecutarPago = async () => {
     { id: "historial", label: "Historial", icon: historialIcon },
     { id: "pago", label: "Métodos de Pago", icon: enviosIcon },
     { id: "cupones", label: "Cupones", icon: cuponesIcon },
+    { id: "reportes", label: "Mis Reportes", icon: ayudaIcon },
     { id: "perfil", label: "Mi Perfil", icon: perfilIcon },
     { id: "ayuda", label: "Ayuda", icon: ayudaIcon },
   ];
@@ -697,6 +782,16 @@ const ejecutarPago = async () => {
                           Cancelar
                         </button>
                       )}
+                      {res.estado === 'entregado' && (
+                        <button className="btn-secundario" style={{ color: "#B45309", borderColor: "#FDE68A", fontSize: "12px", padding: "6px 12px" }}
+                          onClick={() => {
+                            console.log("Datos de la reservación seleccionada:", res); 
+                            setModalReporte(res);
+                          }}
+                          >
+                          Reportar Problema
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -791,6 +886,110 @@ const ejecutarPago = async () => {
             </div>
           </div>
         )}
+
+{/* REPORTES */}
+        {vista === "reportes" && (
+          <div className="cliente-card">
+            <h2 className="cliente-card-title">Mis Reportes</h2>
+            <p className="cliente-card-subtitle">Historial y estado de los inconvenientes que has reportado.</p>
+
+            {reportes.length === 0 ? (
+              <div className="estado-vacio">
+                <img src={ayudaIcon} alt="Sin reportes" style={{ width: "48px", opacity: 0.3 }} />
+                <p>No tienes reportes emitidos.</p>
+              </div>
+            ) : (
+              reportes.map(rep => (
+                <div key={rep.id} style={{ padding: "16px", marginBottom: "12px", border: "1px solid #E2E8F0", borderRadius: "var(--radio)", backgroundColor: "#FAFAFA" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "8px" }}>
+                    <div>
+                      <span style={{ fontSize: "12px", color: "var(--color-texto-mutado)", textTransform: "uppercase", fontWeight: "700" }}>
+                        Servicio de {rep.tipo_servicio}
+                      </span>
+                      <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-secundario)", margin: "6px 0" }}>{rep.motivo}</div>
+                      <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", margin: 0 }}>
+                        Fecha: {rep.fecha_creacion ? new Date(rep.fecha_creacion).toLocaleDateString('es-GT', { timeZone: 'UTC' }) : 'Fecha no disponible'}
+                      </p>
+                    </div>
+                    <div>
+                      {getBadgeReporte(rep.estado)}
+                    </div>
+                  </div>
+                  <div style={{ backgroundColor: "white", padding: "12px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                    <p style={{ fontSize: "14px", color: "var(--color-texto-mutado)", margin: 0, fontStyle: "italic" }}>"{rep.descripcion}"</p>
+                  </div>
+                  {rep.evidencia && (
+                    <div style={{ marginTop: "12px" }}>
+                      <a href={`http://localhost:3000${rep.evidencia}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#2563EB", textDecoration: "underline", fontWeight: "600" }}>
+                        Ver evidencia adjunta
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {modalReporte && (
+          <div className="modal-overlay">
+            <div className="modal-box" style={{ maxWidth: "500px" }}>
+              <h3 className="modal-titulo">Reportar Inconveniente</h3>
+              <p className="modal-descripcion mb-4">
+                Servicio: {modalReporte.tipo_servicio === 'envio' ? modalReporte.nombre_envio : modalReporte.nombre_transporte}
+              </p>
+              
+              <form onSubmit={enviarReporte}>
+                <div className="form-grupo">
+                  <label className="form-label-cliente">Motivo del reporte *</label>
+                  <select 
+                    className="form-input-cliente"
+                    value={formReporte.motivo} 
+                    onChange={(e) => setFormReporte({ ...formReporte, motivo: e.target.value })} 
+                    required
+                  >
+                    <option value="">Seleccione un motivo...</option>
+                    <option value="Retraso no justificado">Retraso no justificado</option>
+                    <option value="Cobro extra no acordado">Cobro extra no acordado</option>
+                    <option value="Daño al paquete">Daño al paquete</option>
+                    <option value="Cancelación sin aviso">Cancelación sin aviso</option>
+                    <option value="Servicio no realizado">Servicio no realizado</option>
+                  </select>
+                </div>
+
+                <div className="form-grupo">
+                  <label className="form-label-cliente">Descripción detallada *</label>
+                  <textarea 
+                    className="form-input-cliente"
+                    rows="3" 
+                    value={formReporte.descripcion} 
+                    onChange={(e) => setFormReporte({ ...formReporte, descripcion: e.target.value })} 
+                    required 
+                  />
+                </div>
+
+                <div className="form-grupo">
+                  <label className="form-label-cliente">Evidencia (Foto/Video)</label>
+                  <input 
+                    type="file" 
+                    accept="image/*,video/*" 
+                    onChange={(e) => setFormReporte({ ...formReporte, archivo: e.target.files[0] })} 
+                    className="form-input-cliente"
+                    style={{ padding: "8px" }}
+                  />
+                </div>
+
+                <div className="modal-acciones mt-4">
+                  <button type="button" className="btn-secundario" onClick={() => setModalReporte(null)}>Cancelar</button>
+                  <button type="submit" className="btn-peligro" disabled={cargando}>
+                    {cargando ? "Enviando..." : "Enviar Reporte"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
 
         {/* CUPONES */}
         {vista === "cupones" && (
