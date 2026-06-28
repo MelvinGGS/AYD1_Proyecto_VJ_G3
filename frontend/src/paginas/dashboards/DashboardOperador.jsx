@@ -742,7 +742,20 @@ function DashboardOperador() {
         `${c.cliente_nombre || ""} ${c.cliente_apellido || ""}`,
         c.nombre_servicio || "",
         c.fecha ? new Date(c.fecha).toLocaleDateString() : "N/A",
-        "★".repeat(c.puntuacion) + "☆".repeat(5 - c.puntuacion),
+        <div style={{ display: "flex", gap: "2px" }}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <span
+            key={star}
+            style={{
+              fontSize: "20px", 
+              color: star <= c.puntuacion ? "#F59E0B" : "#E2E8F0", 
+              lineHeight: "1"
+            }}
+          >
+            ★
+          </span>
+        ))}
+      </div>,
         c.comentario || "Sin comentario"
       ]);
 
@@ -2126,7 +2139,20 @@ function DashboardOperador() {
                                   </small>
                                 </div>
                                 <div className="text-warning fs-6" title={`${calif.puntuacion} de 5 estrellas`}>
-                                  {"⭐".repeat(calif.puntuacion)}{"☆".repeat(5 - calif.puntuacion)}
+                                  <div style={{ display: "flex", gap: "2px" }}>
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <span
+                                      key={star}
+                                      style={{
+                                        fontSize: "20px", 
+                                        color: star <= calif.puntuacion ? "#F59E0B" : "#E2E8F0", 
+                                        lineHeight: "1"
+                                      }}
+                                    >
+                                      ★
+                                    </span>
+                                  ))}
+                                </div>
                                 </div>
                               </div>
                               <p className="mb-0" style={{ fontSize: "14px", color: "#334155" }}>

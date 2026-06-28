@@ -55,6 +55,9 @@ function DashboardCliente() {
   const [reportes, setReportes] = useState([]);
   const [modalReporte, setModalReporte] = useState(null);
   const [formReporte, setFormReporte] = useState({ motivo: "", descripcion: "", archivo: null });
+// ESTADOS PARA CALIFICACIONES
+  const [modalCalificacion, setModalCalificacion] = useState(null);
+  const [formCalificacion, setFormCalificacion] = useState({ puntuacion: 5, comentario: "" });
 
 
   const [carrito, setCarrito] = useState([]);
@@ -185,6 +188,44 @@ function DashboardCliente() {
       }
     } catch {
       mostrarAlerta("error", "Error al enviar el reporte.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const enviarCalificacion = async (e) => {
+    e.preventDefault();
+    setCargando(true);
+
+    try {
+      const res = await fetch('http://localhost:3000/api/calificaciones', {
+        method: 'POST',
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${getToken()}` 
+        },
+        body: JSON.stringify({
+          cliente_id: localStorage.getItem("id"),
+          proveedor_id: modalCalificacion.empresa_id,
+          reservacion_id: modalCalificacion.id,
+          tipo_servicio: modalCalificacion.tipo_servicio,
+          puntuacion: formCalificacion.puntuacion,
+          comentario: formCalificacion.comentario
+        })
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        mostrarAlerta("success", "¡Gracias por tu calificación!");
+        setModalCalificacion(null);
+        setFormCalificacion({ puntuacion: 5, comentario: "" });
+        cargarReservaciones();
+        
+      } else {
+        mostrarAlerta("error", data.message);
+      }
+    } catch {
+      mostrarAlerta("error", "Error al enviar la calificación.");
     } finally {
       setCargando(false);
     }
@@ -783,6 +824,31 @@ const ejecutarPago = async () => {
                         </button>
                       )}
                       {res.estado === 'entregado' && (
+                        <>
+                          {res.ha_calificado ? (
+                        <span style={{ 
+                          backgroundColor: "#E0F2FE", 
+                          color: "#0369A1",         
+                          padding: "3px 10px",        
+                          borderRadius: "20px",      
+                          fontSize: "11px",           
+                          fontWeight: "bold",         
+                          textTransform: "uppercase", 
+                          letterSpacing: "0.5px",     
+                          display: "inline-block",
+                          textAlign: "center"
+                        }}>
+                          Calificado
+                        </span>
+                      ) : (
+                        <button className="btn-secundario" style={{ color: "#0369A1", borderColor: "#BAE6FD", fontSize: "12px", padding: "6px 12px" }}
+                          onClick={() => setModalCalificacion({
+                              ...res,
+                              empresa_id: res.empresa_id || res.proveedor_id 
+                          })}>
+                          Calificar
+                        </button>
+                      )}
                         <button className="btn-secundario" style={{ color: "#B45309", borderColor: "#FDE68A", fontSize: "12px", padding: "6px 12px" }}
                           onClick={() => {
                             console.log("Datos de la reservación seleccionada:", res); 
@@ -791,6 +857,7 @@ const ejecutarPago = async () => {
                           >
                           Reportar Problema
                         </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -983,6 +1050,55 @@ const ejecutarPago = async () => {
                   <button type="button" className="btn-secundario" onClick={() => setModalReporte(null)}>Cancelar</button>
                   <button type="submit" className="btn-peligro" disabled={cargando}>
                     {cargando ? "Enviando..." : "Enviar Reporte"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE CALIFICACIÓN */}
+        {modalCalificacion && (
+          <div className="modal-overlay">
+            <div className="modal-box" style={{ maxWidth: "450px", textAlign: "center" }}>
+              <h3 className="modal-titulo">Calificar Servicio</h3>
+              <p className="modal-descripcion mb-4">
+                ¿Qué te pareció el viaje a <strong>{modalCalificacion.tipo_servicio === 'envio' ? modalCalificacion.nombre_envio : modalCalificacion.nombre_transporte}</strong>?
+              </p>
+              
+              <form onSubmit={enviarCalificacion}>
+                <div className="form-grupo" style={{ display: "flex", justifyContent: "center", gap: "12px", marginBottom: "20px" }}>
+                  {[1, 2, 3, 4, 5].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setFormCalificacion({ ...formCalificacion, puntuacion: num })}
+                      style={{
+                        background: "none", border: "none", cursor: "pointer",
+                        fontSize: "32px", color: formCalificacion.puntuacion >= num ? "#F59E0B" : "#E2E8F0",
+                        transition: "color 0.2s"
+                      }}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+
+                <div className="form-grupo text-start">
+                  <label className="form-label-cliente">Comentario (Opcional)</label>
+                  <textarea 
+                    className="form-input-cliente"
+                    rows="3" 
+                    placeholder="Cuéntanos tu experiencia..."
+                    value={formCalificacion.comentario} 
+                    onChange={(e) => setFormCalificacion({ ...formCalificacion, comentario: e.target.value })} 
+                  />
+                </div>
+
+                <div className="modal-acciones mt-4">
+                  <button type="button" className="btn-secundario" onClick={() => setModalCalificacion(null)}>Cancelar</button>
+                  <button type="submit" className="btn-primario" disabled={cargando}>
+                    {cargando ? "Enviando..." : "Enviar Calificación"}
                   </button>
                 </div>
               </form>
