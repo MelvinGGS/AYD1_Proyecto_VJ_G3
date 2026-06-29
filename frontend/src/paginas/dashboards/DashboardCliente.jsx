@@ -13,16 +13,31 @@ import historialIcon from "../../assets/iconos/historial.png";
 import cuponesIcon from "../../assets/iconos/cupones.png";
 import buscarIcon from "../../assets/iconos/buscar.png";
 
-function RutaCard({ ruta, onAgregar, cargando }) {
-  const [fecha, setFecha] = useState("");
+function RutaCard({ ruta, onAgregar, cargando, fechaFiltro = "" }) {
+  const [fecha, setFecha] = useState(fechaFiltro);
+
+  useEffect(() => {
+    if (fechaFiltro) setFecha(fechaFiltro);
+  }, [fechaFiltro]);
+
   return (
-    <div className="ruta-card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "12px" }}>
-        <h4 style={{ fontWeight: "700", color: "var(--color-secundario)", margin: 0 }}>{ruta.nombre_ruta}</h4>
-        <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--color-primario)" }}>Q{ruta.precio}</span>
+    <article className="transport-catalog-card">
+      <div className="transport-card-top">
+        <div>
+          <span className="transport-type">{ruta.tipo_servicio}</span>
+          <h3>{ruta.nombre_ruta}</h3>
+          <p>{ruta.nombre_empresa}</p>
+        </div>
+        <strong>Q{Number(ruta.precio).toFixed(2)}</strong>
       </div>
-      <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "4px" }}> {ruta.origen}  {ruta.destino}</p>
-      {ruta.tiempo_estimado && <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "12px" }}> {ruta.tiempo_estimado}</p>}
+
+      <div className="transport-route-line"><span>{ruta.origen}</span><i>→</i><span>{ruta.destino}</span></div>
+      <div className="transport-metrics">
+        <span><b>{ruta.hora_salida ? ruta.hora_salida.slice(0, 5) : "Por confirmar"}</b>Salida</span>
+        <span><b>{ruta.tiempo_estimado || "Por confirmar"}</b>Duracion</span>
+        <span><b>{Number(ruta.calificacion_empresa || 0).toFixed(1)} / 5</b>Empresa</span>
+      </div>
+
       <div className="form-grupo">
         <label className="form-label-cliente">Fecha de viaje</label>
         <input
@@ -35,13 +50,12 @@ function RutaCard({ ruta, onAgregar, cargando }) {
       </div>
       <button
         className="btn-primario"
-        style={{ width: "100%" }}
         onClick={() => onAgregar(ruta.id, ruta, fecha)}
         disabled={cargando}
       >
-        Agregar al Carrito
+        Agregar transporte al carrito
       </button>
-    </div>
+    </article>
   );
 }
 
@@ -119,6 +133,15 @@ function DashboardCliente() {
   const [metodosPago, setMetodosPago] = useState([]);
   const [metodoSeleccionado, setMetodoSeleccionado] = useState("");
   const [rutasDisponibles, setRutasDisponibles] = useState([]);
+  const [destinoTransporte, setDestinoTransporte] = useState("");
+  const [fechaTransporte, setFechaTransporte] = useState("");
+  const [empresaTransporte, setEmpresaTransporte] = useState("");
+  const [tipoTransporte, setTipoTransporte] = useState("");
+  const [ordenTransporte, setOrdenTransporte] = useState("calificacion_desc");
+  const [filtrosTransporte, setFiltrosTransporte] = useState({ empresas: [], tipos: [] });
+  const [cargandoTransportes, setCargandoTransportes] = useState(false);
+  const [errorTransportes, setErrorTransportes] = useState("");
+  const [recomendaciones, setRecomendaciones] = useState(null);
   const [serviciosEnvio, setServiciosEnvio] = useState([]);
   const [busquedaEnvio, setBusquedaEnvio] = useState("");
   const [ordenEnvio, setOrdenEnvio] = useState("alfabetico");
@@ -171,12 +194,35 @@ function DashboardCliente() {
     return () => clearTimeout(temporizador);
   }, [vista, busquedaEnvio, ordenEnvio]);
 
+  useEffect(() => {
+    if (vista !== "transporte") return undefined;
+    const temporizador = setTimeout(() => cargarRutasDisponibles(), 300);
+    return () => clearTimeout(temporizador);
+  }, [vista, destinoTransporte, fechaTransporte, empresaTransporte, tipoTransporte, ordenTransporte]);
+
   const cargarRutasDisponibles = async () => {
+    setCargandoTransportes(true);
+    setErrorTransportes("");
+    const parametros = new URLSearchParams({ orden: ordenTransporte });
+    if (destinoTransporte.trim()) parametros.set("destino", destinoTransporte.trim());
+    if (fechaTransporte) parametros.set("fecha", fechaTransporte);
+    if (empresaTransporte) parametros.set("empresa_id", empresaTransporte);
+    if (tipoTransporte) parametros.set("tipo", tipoTransporte);
+
     try {
-      const res = await fetch("http://localhost:3000/api/rutas/activas");
+      const res = await fetch(`http://localhost:3000/api/cliente/transportes?${parametros}`, {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+      });
       const data = await res.json();
-      if (data.success) setRutasDisponibles(data.data);
-    } catch { mostrarAlerta("error", "No se pudieron cargar las rutas disponibles."); }
+      if (res.ok && data.success) {
+        setRutasDisponibles(data.data || []);
+        setFiltrosTransporte(data.filtros || { empresas: [], tipos: [] });
+      } else setErrorTransportes(data.message || "No se pudieron cargar las rutas disponibles.");
+    } catch {
+      setErrorTransportes("No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoTransportes(false);
+    }
   };
 
   const cargarServiciosEnvio = async () => {
@@ -357,8 +403,22 @@ const getBadgeReporte = (estadoRaw) => {
     return (suma % 10) === 0;
   };
 
+  const recomendarEnviosParaDestino = async (destino, origen = "destino") => {
+    const parametros = new URLSearchParams({ buscar: destino, orden: "calificacion" });
+    try {
+      const res = await fetch(`http://localhost:3000/api/cliente/servicios-envio?${parametros}`, {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      if (data.success && data.data.length > 0) setRecomendaciones({ tipo: "envios", contexto: destino, origen, items: data.data.slice(0, 3) });
+    } catch {
+      console.error("No se pudieron cargar recomendaciones de envio.");
+    }
+  };
+
   const agregarAlCarrito = async (rutaId, rutaData, fechaInput) => {
     if (!fechaInput) { mostrarAlerta("warning", "Debes seleccionar una fecha para el viaje."); return; }
+    const esPrimerServicio = carrito.length === 0;
     setCargando(true);
     try {
       const res = await fetch("http://localhost:3000/api/carrito", {
@@ -367,7 +427,11 @@ const getBadgeReporte = (estadoRaw) => {
         body: JSON.stringify({ servicio_id: rutaId, tipo_servicio: "transporte", fecha_inicio: fechaInput, precio_unitario: rutaData.precio })
       });
       const data = await res.json();
-      if (data.success) { cargarCarrito(); mostrarAlerta("success", "Servicio agregado al carrito exitosamente."); }
+      if (data.success) {
+        await cargarCarrito();
+        mostrarAlerta("success", "Servicio agregado al carrito exitosamente.");
+        if (esPrimerServicio) await recomendarEnviosParaDestino(rutaData.destino);
+      }
       else mostrarAlerta("error", data.message || "Error al agregar al carrito.");
     } catch { mostrarAlerta("error", "Error de conexión. Intenta nuevamente."); }
     finally { setCargando(false); }
@@ -383,6 +447,7 @@ const getBadgeReporte = (estadoRaw) => {
       return;
     }
 
+    const esPrimerServicio = carrito.length === 0;
     setCargando(true);
     try {
       const res = await fetch("http://localhost:3000/api/carrito", {
@@ -399,6 +464,7 @@ const getBadgeReporte = (estadoRaw) => {
       if (data.success) {
         await cargarCarrito();
         mostrarAlerta("success", "Servicio de envio agregado al carrito.");
+        if (esPrimerServicio) await recomendarEnviosParaDestino(servicio.zona_cobertura, "zona");
       } else mostrarAlerta("error", data.message || "No se pudo agregar el servicio.");
     } catch {
       mostrarAlerta("error", "Error de conexion. Intenta nuevamente.");
@@ -681,6 +747,41 @@ const ejecutarPago = async () => {
         </div>
       )}
 
+      {recomendaciones && (
+        <div className="modal-overlay recommendation-overlay">
+          <div className="recommendation-modal">
+            <div className="recommendation-header">
+              <div>
+                <span>Completa tu reservacion</span>
+                <h3>{recomendaciones.origen === "zona" ? "Operadores recomendados para la misma zona" : "Envios recomendados para tu destino"}</h3>
+                <p>Seleccionamos las 3 opciones mejor calificadas relacionadas con {recomendaciones.contexto}.</p>
+              </div>
+              <button type="button" onClick={() => setRecomendaciones(null)} aria-label="Cerrar">x</button>
+            </div>
+
+            <div className="recommendation-grid">
+              {recomendaciones.tipo === "envios"
+                ? recomendaciones.items.map((servicio) => <ServicioEnvioCard key={servicio.id} servicio={servicio} onAgregar={agregarEnvioAlCarrito} cargando={cargando} />)
+                : recomendaciones.items.map((ruta) => <RutaCard key={ruta.id} ruta={ruta} onAgregar={agregarAlCarrito} cargando={cargando} />)}
+            </div>
+
+            <div className="recommendation-actions">
+              <button type="button" className="btn-secundario" onClick={() => setRecomendaciones(null)}>Seguir con mi carrito</button>
+              <button type="button" className="btn-primario" onClick={() => {
+                if (recomendaciones.tipo === "envios") {
+                  setBusquedaEnvio(recomendaciones.contexto);
+                  setVista("envios");
+                } else {
+                  setDestinoTransporte(recomendaciones.contexto);
+                  setVista("transporte");
+                }
+                setRecomendaciones(null);
+              }}>Ver todas las opciones</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* NAVBAR */}
       <nav className="navbar-cliente">
         <span className="navbar-brand-cliente">TrackFlow-HUB</span>
@@ -825,22 +926,70 @@ const ejecutarPago = async () => {
         {vista === "transporte" && (
           <div>
             <div className="cliente-card">
-              <h2 className="cliente-card-title">Rutas de Transporte Disponibles</h2>
-              <p className="cliente-card-subtitle">Selecciona una fecha y agrega el viaje a tu carrito.</p>
+              <div className="envio-catalog-header">
+                <div>
+                  <h2 className="cliente-card-title">Servicios de transporte</h2>
+                  <p className="cliente-card-subtitle">Busca por destino, fecha, empresa y tipo de servicio.</p>
+                </div>
+                <span>{rutasDisponibles.length} resultados</span>
+              </div>
 
-              {rutasDisponibles.length === 0 ? (
+              <div className="transport-filter-panel">
+                <div className="transport-filter-main">
+                  <div className="envio-search-box">
+                    <img src={buscarIcon} alt="" />
+                    <input type="search" maxLength="100" placeholder="Destino..." value={destinoTransporte} onChange={(evento) => setDestinoTransporte(evento.target.value)} />
+                    {destinoTransporte && <button type="button" onClick={() => setDestinoTransporte("")} aria-label="Limpiar destino">x</button>}
+                  </div>
+                  <input type="date" className="transport-filter-input" min={new Date(Date.now() + 86400000).toISOString().split("T")[0]} value={fechaTransporte} onChange={(evento) => setFechaTransporte(evento.target.value)} aria-label="Fecha de viaje" />
+                  <select className="transport-filter-input" value={empresaTransporte} onChange={(evento) => setEmpresaTransporte(evento.target.value)} aria-label="Empresa proveedora">
+                    <option value="">Todas las empresas</option>
+                    {filtrosTransporte.empresas.map((empresa) => <option value={empresa.id} key={empresa.id}>{empresa.nombre_empresa}</option>)}
+                  </select>
+                  <select className="transport-filter-input" value={tipoTransporte} onChange={(evento) => setTipoTransporte(evento.target.value)} aria-label="Tipo de servicio">
+                    <option value="">Todos los tipos</option>
+                    {filtrosTransporte.tipos.map((tipo) => <option value={tipo} key={tipo}>{tipo}</option>)}
+                  </select>
+                </div>
+
+                <div className="transport-sort-row">
+                  <label htmlFor="orden-transporte">Ordenar por</label>
+                  <select id="orden-transporte" value={ordenTransporte} onChange={(evento) => setOrdenTransporte(evento.target.value)}>
+                    <option value="hora_asc">Hora de inicio: temprana a tarde</option>
+                    <option value="hora_desc">Hora de inicio: tarde a temprana</option>
+                    <option value="empresa_asc">Empresa: A-Z</option>
+                    <option value="empresa_desc">Empresa: Z-A</option>
+                    <option value="tiempo_asc">Tiempo estimado: menor a mayor</option>
+                    <option value="tiempo_desc">Tiempo estimado: mayor a menor</option>
+                    <option value="precio_asc">Precio: menor a mayor</option>
+                    <option value="precio_desc">Precio: mayor a menor</option>
+                    <option value="calificacion_desc">Calificacion: mayor a menor</option>
+                    <option value="calificacion_asc">Calificacion: menor a mayor</option>
+                  </select>
+                  <button type="button" onClick={() => {
+                    setDestinoTransporte(""); setFechaTransporte(""); setEmpresaTransporte(""); setTipoTransporte(""); setOrdenTransporte("calificacion_desc");
+                  }}>Limpiar filtros</button>
+                </div>
+              </div>
+
+              {errorTransportes && <div className="cliente-alert error">{errorTransportes}</div>}
+
+              {cargandoTransportes ? (
+                <div className="estado-vacio"><p>Cargando servicios de transporte...</p></div>
+              ) : rutasDisponibles.length === 0 ? (
                 <div className="estado-vacio">
                   <img src={transporteIcon} alt="Sin rutas" style={{ width: "48px", opacity: 0.3 }} />
-                  <p>No hay rutas disponibles en este momento.</p>
+                  <p>No hay rutas que coincidan con los filtros seleccionados.</p>
                 </div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "16px" }}>
+                <div className="transport-catalog-grid">
                   {rutasDisponibles.map(ruta => (
                     <RutaCard
                       key={ruta.id}
                       ruta={ruta}
                       onAgregar={agregarAlCarrito}
                       cargando={cargando}
+                      fechaFiltro={fechaTransporte}
                     />
                   ))}
                 </div>
@@ -971,8 +1120,8 @@ const ejecutarPago = async () => {
         {/* HISTORIAL */}
         {vista === "historial" && (
           <div className="cliente-card">
-            <h2 className="cliente-card-title">Mis Reservaciones</h2>
-            <p className="cliente-card-subtitle">Historial de todos tus servicios contratados.</p>
+            <h2 className="cliente-card-title">Servicios contratados y completados</h2>
+            <p className="cliente-card-subtitle">Consulta todos tus envios y transportes con su estado actual.</p>
 
             {reservaciones.length === 0 ? (
               <div className="estado-vacio">
