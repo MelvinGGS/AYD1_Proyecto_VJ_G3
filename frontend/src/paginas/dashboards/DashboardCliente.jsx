@@ -11,6 +11,7 @@ import ayudaIcon from "../../assets/iconos/ayuda.png";
 import logoutIcon from "../../assets/iconos/logout.png";
 import historialIcon from "../../assets/iconos/historial.png";
 import cuponesIcon from "../../assets/iconos/cupones.png";
+import buscarIcon from "../../assets/iconos/buscar.png";
 
 function RutaCard({ ruta, onAgregar, cargando }) {
   const [fecha, setFecha] = useState("");
@@ -44,6 +45,59 @@ function RutaCard({ ruta, onAgregar, cargando }) {
   );
 }
 
+function ServicioEnvioCard({ servicio, onAgregar, cargando }) {
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
+  const fotoPrincipal = servicio.fotos?.[0]?.url_foto;
+  const fechaMinima = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+
+  return (
+    <article className="envio-catalog-card">
+      <div className="envio-card-image">
+        {fotoPrincipal
+          ? <img src={fotoPrincipal} alt={servicio.nombre_servicio} />
+          : <img src={enviosIcon} alt="Servicio de envio" className="envio-card-placeholder" />}
+        <span>{servicio.zona_cobertura}</span>
+      </div>
+      <div className="envio-card-body">
+        <div className="envio-card-heading">
+          <div>
+            <h3>{servicio.nombre_servicio}</h3>
+            <p>Por {servicio.operador}</p>
+          </div>
+          <strong>Q{servicio.precio_envio.toFixed(2)}</strong>
+        </div>
+
+        <p className="envio-card-description">{servicio.descripcion || "Servicio logistico disponible para tus envios."}</p>
+
+        <div className="envio-card-metrics">
+          <span><b>{servicio.calificacion_promedio.toFixed(1)} / 5</b>{servicio.total_calificaciones} calificaciones</span>
+          <span><b>{servicio.capacidad_carga_kg} kg</b>Capacidad</span>
+          <span><b>{servicio.tiempo_estimado_entrega || "Por confirmar"}</b>Entrega</span>
+        </div>
+
+        <div className="envio-date-grid">
+          <div>
+            <label htmlFor={`inicio-${servicio.id}`}>Fecha de recoleccion</label>
+            <input id={`inicio-${servicio.id}`} type="date" value={fechaInicio} min={fechaMinima} onChange={(evento) => {
+              setFechaInicio(evento.target.value);
+              if (fechaFin && fechaFin < evento.target.value) setFechaFin("");
+            }} />
+          </div>
+          <div>
+            <label htmlFor={`fin-${servicio.id}`}>Fecha de entrega</label>
+            <input id={`fin-${servicio.id}`} type="date" value={fechaFin} min={fechaInicio || fechaMinima} onChange={(evento) => setFechaFin(evento.target.value)} />
+          </div>
+        </div>
+
+        <button className="btn-primario" type="button" disabled={cargando} onClick={() => onAgregar(servicio, fechaInicio, fechaFin)}>
+          Agregar envio al carrito
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function DashboardCliente() {
   const navigate = useNavigate();
   const [vista, setVista] = useState("inicio");
@@ -65,6 +119,11 @@ function DashboardCliente() {
   const [metodosPago, setMetodosPago] = useState([]);
   const [metodoSeleccionado, setMetodoSeleccionado] = useState("");
   const [rutasDisponibles, setRutasDisponibles] = useState([]);
+  const [serviciosEnvio, setServiciosEnvio] = useState([]);
+  const [busquedaEnvio, setBusquedaEnvio] = useState("");
+  const [ordenEnvio, setOrdenEnvio] = useState("alfabetico");
+  const [cargandoServiciosEnvio, setCargandoServiciosEnvio] = useState(false);
+  const [errorServiciosEnvio, setErrorServiciosEnvio] = useState("");
   const [reservaciones, setReservaciones] = useState([]);
 
   const [formTarjeta, setFormTarjeta] = useState({
@@ -106,12 +165,38 @@ function DashboardCliente() {
     if (vista === "reportes") cargarReportes();
   }, [vista]);
 
+  useEffect(() => {
+    if (vista !== "envios") return undefined;
+    const temporizador = setTimeout(() => cargarServiciosEnvio(), 300);
+    return () => clearTimeout(temporizador);
+  }, [vista, busquedaEnvio, ordenEnvio]);
+
   const cargarRutasDisponibles = async () => {
     try {
       const res = await fetch("http://localhost:3000/api/rutas/activas");
       const data = await res.json();
       if (data.success) setRutasDisponibles(data.data);
     } catch { mostrarAlerta("error", "No se pudieron cargar las rutas disponibles."); }
+  };
+
+  const cargarServiciosEnvio = async () => {
+    setCargandoServiciosEnvio(true);
+    setErrorServiciosEnvio("");
+    const parametros = new URLSearchParams({ orden: ordenEnvio });
+    if (busquedaEnvio.trim()) parametros.set("buscar", busquedaEnvio.trim());
+
+    try {
+      const res = await fetch(`http://localhost:3000/api/cliente/servicios-envio?${parametros}`, {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) setServiciosEnvio(data.data || []);
+      else setErrorServiciosEnvio(data.message || "No se pudieron cargar los servicios de envio.");
+    } catch {
+      setErrorServiciosEnvio("No se pudo conectar con el servidor.");
+    } finally {
+      setCargandoServiciosEnvio(false);
+    }
   };
 
   const cargarCarrito = async () => {
@@ -286,6 +371,40 @@ const getBadgeReporte = (estadoRaw) => {
       else mostrarAlerta("error", data.message || "Error al agregar al carrito.");
     } catch { mostrarAlerta("error", "Error de conexión. Intenta nuevamente."); }
     finally { setCargando(false); }
+  };
+
+  const agregarEnvioAlCarrito = async (servicio, fechaInicio, fechaFin) => {
+    if (!fechaInicio || !fechaFin) {
+      mostrarAlerta("warning", "Selecciona las fechas de recoleccion y entrega.");
+      return;
+    }
+    if (fechaFin < fechaInicio) {
+      mostrarAlerta("warning", "La fecha de entrega no puede ser anterior a la recoleccion.");
+      return;
+    }
+
+    setCargando(true);
+    try {
+      const res = await fetch("http://localhost:3000/api/carrito", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+        body: JSON.stringify({
+          servicio_id: servicio.id,
+          tipo_servicio: "envio",
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        await cargarCarrito();
+        mostrarAlerta("success", "Servicio de envio agregado al carrito.");
+      } else mostrarAlerta("error", data.message || "No se pudo agregar el servicio.");
+    } catch {
+      mostrarAlerta("error", "Error de conexion. Intenta nuevamente.");
+    } finally {
+      setCargando(false);
+    }
   };
 
   const confirmarEliminarItem = (id) => {
@@ -522,6 +641,7 @@ const ejecutarPago = async () => {
 
   const navItems = [
     { id: "inicio", label: "Inicio", icon: inicioIcon },
+    { id: "envios", label: "Envios", icon: enviosIcon },
     { id: "transporte", label: "Transporte", icon: transporteIcon },
     { id: "carrito", label: "Carrito", icon: carritoIcon },
     { id: "historial", label: "Historial", icon: historialIcon },
@@ -641,6 +761,62 @@ const ejecutarPago = async () => {
                 <h3 style={{ fontSize: "32px", fontWeight: "800", color: "var(--color-primario)" }}>{metodosPago.length}</h3>
                 <p style={{ color: "var(--color-texto-mutado)", fontSize: "13px" }}>Métodos de pago</p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* SERVICIOS DE ENVIO */}
+        {vista === "envios" && (
+          <div>
+            <div className="cliente-card">
+              <div className="envio-catalog-header">
+                <div>
+                  <h2 className="cliente-card-title">Servicios de envio</h2>
+                  <p className="cliente-card-subtitle">Busca por nombre, zona de cobertura u operador logistico.</p>
+                </div>
+                <span>{serviciosEnvio.length} resultados</span>
+              </div>
+
+              <div className="envio-search-toolbar">
+                <div className="envio-search-box">
+                  <img src={buscarIcon} alt="" />
+                  <input
+                    type="search"
+                    placeholder="Buscar por zona, operador o nombre..."
+                    value={busquedaEnvio}
+                    maxLength="100"
+                    onChange={(evento) => setBusquedaEnvio(evento.target.value)}
+                  />
+                  {busquedaEnvio && <button type="button" onClick={() => setBusquedaEnvio("")} aria-label="Limpiar busqueda">x</button>}
+                </div>
+                <div className="envio-sort-box">
+                  <label htmlFor="orden-envios">Ordenar por</label>
+                  <select id="orden-envios" value={ordenEnvio} onChange={(evento) => setOrdenEnvio(evento.target.value)}>
+                    <option value="alfabetico">Nombre A-Z</option>
+                    <option value="calificacion">Mejor calificacion</option>
+                    <option value="precio_asc">Precio: menor a mayor</option>
+                    <option value="precio_desc">Precio: mayor a menor</option>
+                    <option value="capacidad">Mayor capacidad</option>
+                  </select>
+                </div>
+              </div>
+
+              {errorServiciosEnvio && <div className="cliente-alert error">{errorServiciosEnvio}</div>}
+
+              {cargandoServiciosEnvio ? (
+                <div className="estado-vacio"><p>Cargando servicios de envio...</p></div>
+              ) : serviciosEnvio.length === 0 ? (
+                <div className="estado-vacio">
+                  <img src={enviosIcon} alt="Sin servicios" style={{ width: "48px", opacity: 0.3 }} />
+                  <p>No encontramos servicios que coincidan con tu busqueda.</p>
+                </div>
+              ) : (
+                <div className="envio-catalog-grid">
+                  {serviciosEnvio.map((servicio) => (
+                    <ServicioEnvioCard key={servicio.id} servicio={servicio} onAgregar={agregarEnvioAlCarrito} cargando={cargando} />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
