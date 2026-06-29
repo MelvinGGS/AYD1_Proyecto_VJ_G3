@@ -59,11 +59,8 @@ function RutaCard({ ruta, onAgregar, cargando, fechaFiltro = "" }) {
   );
 }
 
-function ServicioEnvioCard({ servicio, onAgregar, cargando }) {
-  const [fechaInicio, setFechaInicio] = useState("");
-  const [fechaFin, setFechaFin] = useState("");
+function ServicioEnvioCard({ servicio, onVerDetalle }) {
   const fotoPrincipal = servicio.fotos?.[0]?.url_foto;
-  const fechaMinima = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
   return (
     <article className="envio-catalog-card">
@@ -90,25 +87,58 @@ function ServicioEnvioCard({ servicio, onAgregar, cargando }) {
           <span><b>{servicio.tiempo_estimado_entrega || "Por confirmar"}</b>Entrega</span>
         </div>
 
-        <div className="envio-date-grid">
-          <div>
-            <label htmlFor={`inicio-${servicio.id}`}>Fecha de recoleccion</label>
-            <input id={`inicio-${servicio.id}`} type="date" value={fechaInicio} min={fechaMinima} onChange={(evento) => {
-              setFechaInicio(evento.target.value);
-              if (fechaFin && fechaFin < evento.target.value) setFechaFin("");
-            }} />
-          </div>
-          <div>
-            <label htmlFor={`fin-${servicio.id}`}>Fecha de entrega</label>
-            <input id={`fin-${servicio.id}`} type="date" value={fechaFin} min={fechaInicio || fechaMinima} onChange={(evento) => setFechaFin(evento.target.value)} />
-          </div>
-        </div>
-
-        <button className="btn-primario" type="button" disabled={cargando} onClick={() => onAgregar(servicio, fechaInicio, fechaFin)}>
-          Agregar envio al carrito
+        <button className="btn-primario" type="button" onClick={() => onVerDetalle(servicio)}>
+          Ver detalles y programar
         </button>
       </div>
     </article>
+  );
+}
+
+function DetalleEnvioModal({ servicio, onCerrar, onProgramar, cargando }) {
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
+  const fechaMinima = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+
+  return (
+    <div className="modal-overlay shipment-detail-overlay">
+      <div className="shipment-detail-modal">
+        <div className="shipment-detail-header">
+          <div><span>Detalle del servicio</span><h2>{servicio.nombre_servicio}</h2><p>Operado por {servicio.operador}</p></div>
+          <button type="button" onClick={onCerrar} aria-label="Cerrar">x</button>
+        </div>
+
+        {servicio.fotos?.length > 0 && (
+          <div className="shipment-gallery">
+            {servicio.fotos.slice(0, 3).map((foto, indice) => <img src={foto.url_foto} alt={`${servicio.nombre_servicio} ${indice + 1}`} key={`${foto.url_foto}-${indice}`} />)}
+          </div>
+        )}
+
+        <p className="shipment-detail-description">{servicio.descripcion || "Servicio logistico disponible para programar envios."}</p>
+        <div className="shipment-detail-grid">
+          <p><b>Zona de cobertura</b><span>{servicio.zona_cobertura}</span></p>
+          <p><b>Precio</b><span>Q{servicio.precio_envio.toFixed(2)}</span></p>
+          <p><b>Capacidad</b><span>{servicio.capacidad_carga_kg} kg</span></p>
+          <p><b>Calificacion</b><span>{servicio.calificacion_promedio.toFixed(1)} / 5 ({servicio.total_calificaciones})</span></p>
+          <p><b>Tiempo estimado</b><span>{servicio.tiempo_estimado_entrega || "Por confirmar"}</span></p>
+          <p><b>Vehiculo</b><span>{servicio.tipo_vehiculo || "Por confirmar"}</span></p>
+          <p className="shipment-detail-wide"><b>Horario disponible</b><span>{servicio.horario_disponible || "Coordinar con el operador"}</span></p>
+        </div>
+
+        <div className="shipment-schedule-box">
+          <div><h3>Programa tu envio</h3><p>Selecciona un rango con al menos 24 horas de anticipacion.</p></div>
+          <div className="envio-date-grid">
+            <div><label htmlFor="detalle-fecha-inicio">Fecha de recoleccion</label><input id="detalle-fecha-inicio" type="date" value={fechaInicio} min={fechaMinima} onChange={(evento) => { setFechaInicio(evento.target.value); if (fechaFin && fechaFin < evento.target.value) setFechaFin(""); }} /></div>
+            <div><label htmlFor="detalle-fecha-fin">Fecha de entrega</label><input id="detalle-fecha-fin" type="date" value={fechaFin} min={fechaInicio || fechaMinima} onChange={(evento) => setFechaFin(evento.target.value)} /></div>
+          </div>
+        </div>
+
+        <div className="shipment-detail-actions">
+          <button type="button" className="btn-secundario" onClick={onCerrar}>Cancelar</button>
+          <button type="button" className="btn-primario" disabled={cargando} onClick={() => onProgramar(servicio, fechaInicio, fechaFin)}>{cargando ? "Validando disponibilidad..." : "Agregar envio al carrito"}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -147,6 +177,7 @@ function DashboardCliente() {
   const [ordenEnvio, setOrdenEnvio] = useState("alfabetico");
   const [cargandoServiciosEnvio, setCargandoServiciosEnvio] = useState(false);
   const [errorServiciosEnvio, setErrorServiciosEnvio] = useState("");
+  const [servicioDetalle, setServicioDetalle] = useState(null);
   const [reservaciones, setReservaciones] = useState([]);
 
   const [formTarjeta, setFormTarjeta] = useState({
@@ -223,6 +254,11 @@ function DashboardCliente() {
     } finally {
       setCargandoTransportes(false);
     }
+  };
+
+  const abrirDetalleEnvio = (servicio) => {
+    setRecomendaciones(null);
+    setServicioDetalle(servicio);
   };
 
   const cargarServiciosEnvio = async () => {
@@ -416,6 +452,19 @@ const getBadgeReporte = (estadoRaw) => {
     }
   };
 
+  const recomendarTransportesParaZona = async (zona) => {
+    const parametros = new URLSearchParams({ destino: zona, orden: "calificacion_desc", limite: "3" });
+    try {
+      const res = await fetch(`http://localhost:3000/api/cliente/transportes?${parametros}`, {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+      });
+      const data = await res.json();
+      if (data.success && data.data.length > 0) setRecomendaciones({ tipo: "transportes", contexto: zona, origen: "zona", items: data.data });
+    } catch {
+      console.error("No se pudieron cargar recomendaciones de transporte.");
+    }
+  };
+
   const agregarAlCarrito = async (rutaId, rutaData, fechaInput) => {
     if (!fechaInput) { mostrarAlerta("warning", "Debes seleccionar una fecha para el viaje."); return; }
     const esPrimerServicio = carrito.length === 0;
@@ -463,8 +512,9 @@ const getBadgeReporte = (estadoRaw) => {
       const data = await res.json();
       if (data.success) {
         await cargarCarrito();
+        setServicioDetalle(null);
         mostrarAlerta("success", "Servicio de envio agregado al carrito.");
-        if (esPrimerServicio) await recomendarEnviosParaDestino(servicio.zona_cobertura, "zona");
+        if (esPrimerServicio) await recomendarTransportesParaZona(servicio.zona_cobertura);
       } else mostrarAlerta("error", data.message || "No se pudo agregar el servicio.");
     } catch {
       mostrarAlerta("error", "Error de conexion. Intenta nuevamente.");
@@ -753,7 +803,7 @@ const ejecutarPago = async () => {
             <div className="recommendation-header">
               <div>
                 <span>Completa tu reservacion</span>
-                <h3>{recomendaciones.origen === "zona" ? "Operadores recomendados para la misma zona" : "Envios recomendados para tu destino"}</h3>
+                <h3>{recomendaciones.tipo === "transportes" ? "Transportes recomendados para la misma zona" : "Envios recomendados para tu destino"}</h3>
                 <p>Seleccionamos las 3 opciones mejor calificadas relacionadas con {recomendaciones.contexto}.</p>
               </div>
               <button type="button" onClick={() => setRecomendaciones(null)} aria-label="Cerrar">x</button>
@@ -761,7 +811,7 @@ const ejecutarPago = async () => {
 
             <div className="recommendation-grid">
               {recomendaciones.tipo === "envios"
-                ? recomendaciones.items.map((servicio) => <ServicioEnvioCard key={servicio.id} servicio={servicio} onAgregar={agregarEnvioAlCarrito} cargando={cargando} />)
+                ? recomendaciones.items.map((servicio) => <ServicioEnvioCard key={servicio.id} servicio={servicio} onVerDetalle={abrirDetalleEnvio} />)
                 : recomendaciones.items.map((ruta) => <RutaCard key={ruta.id} ruta={ruta} onAgregar={agregarAlCarrito} cargando={cargando} />)}
             </div>
 
@@ -781,6 +831,8 @@ const ejecutarPago = async () => {
           </div>
         </div>
       )}
+
+      {servicioDetalle && <DetalleEnvioModal servicio={servicioDetalle} onCerrar={() => setServicioDetalle(null)} onProgramar={agregarEnvioAlCarrito} cargando={cargando} />}
 
       {/* NAVBAR */}
       <nav className="navbar-cliente">
@@ -914,7 +966,7 @@ const ejecutarPago = async () => {
               ) : (
                 <div className="envio-catalog-grid">
                   {serviciosEnvio.map((servicio) => (
-                    <ServicioEnvioCard key={servicio.id} servicio={servicio} onAgregar={agregarEnvioAlCarrito} cargando={cargando} />
+                    <ServicioEnvioCard key={servicio.id} servicio={servicio} onVerDetalle={abrirDetalleEnvio} />
                   ))}
                 </div>
               )}
