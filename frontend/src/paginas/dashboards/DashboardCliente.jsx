@@ -183,6 +183,7 @@ function DashboardCliente() {
         mostrarAlerta("success", "Reporte enviado para su estudio.");
         setModalReporte(null);
         setFormReporte({ motivo: "", descripcion: "", archivo: null });
+        cargarReservaciones();
       } else {
         mostrarAlerta("error", data.message);
       }
@@ -805,6 +806,7 @@ const ejecutarPago = async () => {
             ) : (
               reservaciones.map(res => (
                 <div key={res.id} style={{ padding: "16px", marginBottom: "12px", border: "1px solid #E2E8F0", borderRadius: "var(--radio)" }}>
+                  
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
                     <div>
                       <p style={{ fontWeight: "700", color: "var(--color-secundario)", marginBottom: "4px" }}>
@@ -815,52 +817,90 @@ const ejecutarPago = async () => {
                       </p>
                       <p style={{ fontSize: "16px", fontWeight: "700", color: "var(--color-primario)", marginTop: "4px" }}>Q{res.precio_total}</p>
                     </div>
+                    
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
                       <span className={getBadgeClass(res.estado)}>{res.estado.replace("_", " ").toUpperCase()}</span>
+                      
                       {res.estado === 'confirmado' && (
                         <button className="btn-secundario" style={{ color: "#EF4444", borderColor: "#FECACA", fontSize: "12px", padding: "6px 12px" }}
                           onClick={() => confirmarCancelar(res.id, res.fecha_inicio)}>
                           Cancelar
                         </button>
                       )}
+                      
                       {res.estado === 'entregado' && (
                         <>
                           {res.ha_calificado ? (
-                        <span style={{ 
-                          backgroundColor: "#E0F2FE", 
-                          color: "#0369A1",         
-                          padding: "3px 10px",        
-                          borderRadius: "20px",      
-                          fontSize: "11px",           
-                          fontWeight: "bold",         
-                          textTransform: "uppercase", 
-                          letterSpacing: "0.5px",     
-                          display: "inline-block",
-                          textAlign: "center"
-                        }}>
-                          Calificado
-                        </span>
-                      ) : (
-                        <button className="btn-secundario" style={{ color: "#0369A1", borderColor: "#BAE6FD", fontSize: "12px", padding: "6px 12px" }}
-                          onClick={() => setModalCalificacion({
-                              ...res,
-                              empresa_id: res.empresa_id || res.proveedor_id 
-                          })}>
-                          Calificar
-                        </button>
-                      )}
-                        <button className="btn-secundario" style={{ color: "#B45309", borderColor: "#FDE68A", fontSize: "12px", padding: "6px 12px" }}
-                          onClick={() => {
-                            console.log("Datos de la reservación seleccionada:", res); 
-                            setModalReporte(res);
-                          }}
-                          >
-                          Reportar Problema
-                        </button>
+                            <span style={{ 
+                              backgroundColor: "#E0F2FE", color: "#0369A1", padding: "3px 10px", borderRadius: "20px", 
+                              fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px", 
+                              display: "inline-block", textAlign: "center"
+                            }}>
+                              Calificado
+                            </span>
+                          ) : (
+                            <button className="btn-secundario" style={{ color: "#0369A1", borderColor: "#BAE6FD", fontSize: "12px", padding: "6px 12px" }}
+                              onClick={() => setModalCalificacion({
+                                  ...res,
+                                  empresa_id: res.empresa_id || res.proveedor_id 
+                              })}>
+                              Calificar
+                            </button>
+                          )}
+                          
+                          {res.ha_reportado ? (
+                            <span style={{ 
+                              backgroundColor: "#FFEDD5", color: "#9A3412", padding: "4px 12px", borderRadius: "20px", 
+                              fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px",
+                              display: "inline-block", textAlign: "center"
+                            }}>
+                              Reportado
+                            </span>
+                          ) : (
+                            <button className="btn-secundario" style={{ color: "#B45309", borderColor: "#FDE68A", fontSize: "12px", padding: "6px 12px" }}
+                              onClick={() => {
+                                const reporteConfigurado = {
+                                  ...res,
+                                  proveedor_id: res.tipo_servicio === 'envio' ? res.operador_id : res.empresa_id
+                                };
+                                setModalReporte(reporteConfigurado);
+                              }}
+                            >
+                              Reportar Problema
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
                   </div>
+
+                  {res.ha_reportado && (
+                    <div style={{ 
+                      marginTop: "15px", 
+                      padding: "12px", 
+                      borderRadius: "6px", 
+                      backgroundColor: "#F8FAFC", 
+                      borderLeft: "4px solid #F59E0B" 
+                    }}>
+
+                      <span style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#B45309", marginBottom: "4px" }}>
+                        Estado de tu reporte: <span style={{ textTransform: "uppercase", color: "#9A3412" }}>
+                          {res.estado_reporte ? res.estado_reporte.replace("_", " ") : "ENVIADO"}
+                        </span>
+                      </span>
+                      
+                      {res.respuesta_reporte ? (
+                        <span style={{ fontSize: "13px", color: "#334155" }}>
+                          <strong style={{ color: "#0284C7" }}>Respuesta de la empresa:</strong> {res.respuesta_reporte}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: "13px", color: "#64748B", fontStyle: "italic" }}>
+                          En breve estaremos respondiendo su reporte.
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                 </div>
               ))
             )}
@@ -1007,7 +1047,7 @@ const ejecutarPago = async () => {
               </p>
               
               <form onSubmit={enviarReporte}>
-                <div className="form-grupo">
+               <div className="form-grupo">
                   <label className="form-label-cliente">Motivo del reporte *</label>
                   <select 
                     className="form-input-cliente"
@@ -1016,11 +1056,23 @@ const ejecutarPago = async () => {
                     required
                   >
                     <option value="">Seleccione un motivo...</option>
-                    <option value="Retraso no justificado">Retraso no justificado</option>
-                    <option value="Cobro extra no acordado">Cobro extra no acordado</option>
-                    <option value="Daño al paquete">Daño al paquete</option>
-                    <option value="Cancelación sin aviso">Cancelación sin aviso</option>
-                    <option value="Servicio no realizado">Servicio no realizado</option>
+                    
+                    {modalReporte.tipo_servicio === 'envio' ? (
+                      <>
+                        <option value="Operador no realizó la recolección a tiempo">Operador no realizó la recolección a tiempo</option>
+                        <option value="Cobro no acordado">Cobro no acordado</option>
+                        <option value="Daño al paquete">Daño al paquete</option>
+                        <option value="Otros">Otros</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Retrasos no justificados">Retrasos no justificados</option>
+                        <option value="Cobros extra">Cobros extra</option>
+                        <option value="Cancelaciones sin aviso">Cancelaciones sin aviso</option>
+                        <option value="Otros">Otros</option>
+                      </>
+                    )}
+
                   </select>
                 </div>
 

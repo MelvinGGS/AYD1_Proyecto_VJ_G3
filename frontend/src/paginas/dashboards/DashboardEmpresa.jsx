@@ -44,6 +44,10 @@ function DashboardEmpresa() {
   const [archivoCSVFlota, setArchivoCSVFlota] = useState(null);
 
 
+  // reportes
+  const [reporteAResponder, setReporteAResponder] = useState(null);
+  const [textoRespuesta, setTextoRespuesta] = useState('');
+
   // ESTADOS PARA EL MODAL DE CANCELACIÓN
   const [modalCancelacion, setModalCancelacion] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
@@ -474,6 +478,34 @@ const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
     } catch (error) {
       console.error("Error al desactivar cupón", error);
     }
+  };
+
+
+const enviarRespuestaReporte = async (reporteId) => {
+      if (!textoRespuesta.trim()) return; 
+      
+      try {
+
+          const res = await fetch(`http://localhost:3000/api/reportes/${reporteId}/responder`, {
+              method: 'PUT',
+              headers: { 
+                  'Content-Type': 'application/json',
+                 
+                  'Authorization': `Bearer ${localStorage.getItem('token')}` 
+              },
+              body: JSON.stringify({ respuesta: textoRespuesta })
+          });
+          
+          const data = await res.json();
+          
+          if (data.success) {
+              setReporteAResponder(null);
+              setTextoRespuesta('');
+              cargarReportes(); 
+          }
+      } catch (error) {
+          console.error("Error al enviar la respuesta:", error);
+      }
   };
 
   return (
@@ -1002,6 +1034,21 @@ const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
                           <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px", textTransform: "uppercase", fontWeight: "700" }}>
                             Cliente: <strong>{r.cliente_email}</strong>
                           </p>
+                          
+                          <p style={{ fontSize: "12px", color: "#64748B", marginBottom: "8px", textTransform: "uppercase", fontWeight: "600" }}>
+                            Servicio implicado: <span style={{ color: "#0284C7" }}>
+                              {r.tipo_servicio === 'envio' ? r.nombre_envio : r.nombre_transporte}
+                            </span>
+                            <span className="ms-3">
+                              Fecha: <span style={{ color: "#0F172A" }}>
+                                {r.fecha_servicio ? new Date(r.fecha_servicio).toLocaleDateString('es-GT', { timeZone: 'UTC' }) : 'N/A'}
+                              </span>
+                            </span>
+                            <span className="ms-3">
+                              Monto: <span style={{ color: "#0F172A" }}>Q{r.precio_total || '0.00'}</span>
+                            </span>
+                          </p>
+
                           <h5 className="fw-bold mb-0" style={{ color: "var(--color-secundario)", fontSize: "16px" }}>{r.motivo}</h5>
                         </div>
                         <span style={{
@@ -1030,41 +1077,75 @@ const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
                       </div>
 
                       {/* BOTONES DE GESTIÓN DE LA EMPRESA */}
-                      <div className="d-flex gap-2 mt-3 pt-2" style={{ borderTop: "1px dashed #E2E8F0" }}>
-                        {r.estado === 'enviado' && (
+                    <div className="d-flex gap-2 mt-3 pt-2" style={{ borderTop: "1px dashed #E2E8F0" }}>
+                      {r.estado === 'enviado' && (
+                        <button
+                          className="btn btn-sm"
+                          style={{ backgroundColor: "#FEF9C3", color: "#854D0E", border: "1px solid #FDE047", fontWeight: "600" }}
+                          onClick={() => cambiarEstadoReporte(r.id, "en_revision")}
+                        >
+                          Poner en Estudio
+                        </button>
+                      )}
+                      {(r.estado === 'enviado' || r.estado === 'en_revision') && (
+                        <>
                           <button
                             className="btn btn-sm"
-                            style={{ backgroundColor: "#FEF9C3", color: "#854D0E", border: "1px solid #FDE047", fontWeight: "600" }}
-                            onClick={() => cambiarEstadoReporte(r.id, "en_revision")}
+                            style={{ backgroundColor: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: "600" }}
+                            onClick={() => cambiarEstadoReporte(r.id, "aceptado")}
                           >
-                            Poner en Estudio
+                            Aceptar
                           </button>
-                        )}
-                        {(r.estado === 'enviado' || r.estado === 'en_revision') && (
-                          <>
-                            <button
-                              className="btn btn-sm"
-                              style={{ backgroundColor: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: "600" }}
-                              onClick={() => cambiarEstadoReporte(r.id, "aceptado")}
-                            >
-                              Aceptar
-                            </button>
-                            <button
-                              className="btn btn-sm"
-                              style={{ backgroundColor: "#FEE2E2", color: "#991B1B", border: "1px solid #FECACA", fontWeight: "600" }}
-                              onClick={() => cambiarEstadoReporte(r.id, "rechazado")}
-                            >
-                              Rechazar
-                            </button>
-                          </>
-                        )}
-                      </div>
+                          <button
+                            className="btn btn-sm"
+                            style={{ backgroundColor: "#FEE2E2", color: "#991B1B", border: "1px solid #FECACA", fontWeight: "600" }}
+                            onClick={() => cambiarEstadoReporte(r.id, "rechazado")}
+                          >
+                            Rechazar
+                          </button>
 
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+                          <button 
+                            className="btn btn-sm ms-2" 
+                            style={{ backgroundColor: "#BAE6FD", color: "#0369A1", fontWeight: "600", border: "none" }}
+                            onClick={() => {
+                              setReporteAResponder(reporteAResponder === r.id ? null : r.id);
+                              setTextoRespuesta(r.respuesta_empresa || ''); 
+                            }}
+                          >
+                            Responder
+                          </button>
+                        </>
+                      )}
+                    </div> 
+
+                    {reporteAResponder === r.id && (
+                      <div className="mt-3 p-3 rounded w-100" style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <p style={{ fontSize: "12px", fontWeight: "bold", color: "#475569", marginBottom: "8px" }}>Tu respuesta al cliente:</p>
+                        <textarea 
+                          className="form-control mb-2" 
+                          rows="2" 
+                          style={{ fontSize: "13px", resize: "none" }}
+                          placeholder="Escribe los detalles de la resolución aquí..."
+                          value={textoRespuesta}
+                          onChange={(e) => setTextoRespuesta(e.target.value)}
+                        ></textarea>
+                        <div className="text-end">
+                          <button 
+                            className="btn btn-sm" 
+                            style={{ backgroundColor: "#0284C7", color: "white", fontSize: "12px" }}
+                            onClick={() => enviarRespuestaReporte(r.id)}
+                          >
+                            Enviar Respuesta
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                ))
+              )}
+            </div>
+          )}
 
             {/* Ganancias */}
             {vistaReporte === "ganancias" && (
