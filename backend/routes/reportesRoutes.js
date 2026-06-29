@@ -34,4 +34,6 @@ router.patch('/:id/estado', reportesController.actualizarEstadoReporte);
 // 4. Rutas de uso para la Empresa de Transporte (y Operadores)
 router.get("/empresa/:empresa_id", reportesController.obtenerReportesContraEmpresa);
 
+router.put('/:id/responder', reportesController.responderReporte);
+
 module.exports = router;

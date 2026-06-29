@@ -264,7 +264,11 @@ const obtenerMisReservaciones = async (req, res) => {
                 rt.nombre_ruta AS nombre_transporte,
                 rt.empresa_id,
                 se.nombre_servicio AS nombre_envio,
-                EXISTS (SELECT 1 FROM calificaciones c WHERE c.reservacion_id = r.id) AS ha_calificado
+                se.operador_id,
+                EXISTS (SELECT 1 FROM calificaciones c WHERE c.reservacion_id = r.id) AS ha_calificado,
+                EXISTS (SELECT 1 FROM reportes rep WHERE rep.reservacion_id = r.id) AS ha_reportado,
+                (SELECT estado FROM reportes rep WHERE rep.reservacion_id = r.id LIMIT 1) AS estado_reporte,
+                (SELECT respuesta_empresa FROM reportes rep WHERE rep.reservacion_id = r.id LIMIT 1) AS respuesta_reporte
             FROM reservaciones r
             LEFT JOIN rutas_transporte rt ON r.ruta_transporte_id = rt.id
             LEFT JOIN servicios_envio se ON r.servicio_envio_id = se.id

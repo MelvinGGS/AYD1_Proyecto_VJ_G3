@@ -117,6 +117,71 @@ function DashboardOperador() {
   const [mensajePerfil, setMensajePerfil] = useState("");
 
   const [pestañaReporte, setPestañaReporte] = useState("ganancias");
+
+  const [reportes, setReportes] = useState([]);
+  const [cargandoReportes, setCargandoReportes] = useState(false);
+  const [reporteAResponder, setReporteAResponder] = useState(null);
+  const [textoRespuesta, setTextoRespuesta] = useState("");
+
+  const cargarReportes = async () => {
+    setCargandoReportes(true);
+    try {
+      const operadorId = localStorage.getItem("usuario_id") || localStorage.getItem("id");
+
+      const res = await fetch(`http://localhost:3000/api/reportes/empresa/${operadorId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) setReportes(data.data);
+    } catch (error) {
+      console.error("Error al cargar reportes", error);
+    } finally {
+      setCargandoReportes(false);
+    }
+  };
+
+  const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/reportes/${reporteId}/estado`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ estado: nuevoEstado })
+      });
+      const data = await res.json();
+      if (data.success) {
+        cargarReportes(); 
+      } else {
+        Swal.fire({ title: "Error", text: data.message, icon: "error" });
+      }
+    } catch (error) {
+      console.error("Error al cambiar estado del reporte", error);
+    }
+  };
+
+  const enviarRespuestaReporte = async (reporteId) => {
+    if (!textoRespuesta.trim()) return; 
+    try {
+      const res = await fetch(`http://localhost:3000/api/reportes/${reporteId}/responder`, {
+        method: "PUT",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` 
+        },
+        body: JSON.stringify({ respuesta: textoRespuesta })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReporteAResponder(null);
+        setTextoRespuesta("");
+        cargarReportes(); 
+      }
+    } catch (error) {
+      console.error("Error al enviar la respuesta:", error);
+    }
+  };
   
   const [reporteGananciasOperador, setReporteGananciasOperador] = useState({
     data: [],
@@ -987,7 +1052,7 @@ function DashboardOperador() {
     } else if (vista === "calendario") {
       cargarCalendario();
     } else if (vista === "calificaciones") {
-      cargarCalificaciones();
+      cargarReportes();
     } else if (vista === "cupones") {
       // Cargado por CuponesOperador
     } else if (vista === "perfil") {
@@ -1318,7 +1383,7 @@ function DashboardOperador() {
                   className={`nav-link border-0 bg-transparent ${vista === "calificaciones" ? "active" : ""}`}
                   onClick={() => setVista("calificaciones")}
                 >
-                  Calificaciones / Reseñas
+                  Reportes Recibidos
                 </button>
               </li>
               <li className="nav-item">
@@ -1778,80 +1843,138 @@ function DashboardOperador() {
           <div className="row">
             <div className="col-12">
               <div className="dashboard-card-custom">
-                <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-                  <div>
-                    <h2 className="dashboard-card-title mb-1">Calificaciones y reseñas</h2>
-                    <p className="text-muted mb-0">Conoce la experiencia de tus clientes y responde sus comentarios.</p>
+                <h2 className="dashboard-card-title">Reportes Recibidos de Clientes</h2>
+                <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)", marginBottom: "20px" }}>
+                  Gestiona las quejas y anomalías reportadas por tus clientes sobre los servicios de envío.
+                </p>
+                
+                {cargandoReportes ? (
+                  <div className="text-center py-5">
+                    <p style={{ color: "var(--color-texto-mutado)" }}>Cargando reportes...</p>
                   </div>
-                  <button type="button" className="btn btn-outline-primary btn-sm" onClick={cargarCalificaciones} disabled={cargandoCalificacionesTab}>
-                    {cargandoCalificacionesTab ? "Actualizando..." : "Actualizar"}
-                  </button>
-                </div>
-
-                <div className="rating-summary-grid mb-4">
-                  <div className="rating-summary-card"><span>Promedio general</span><strong>{resumenCalificaciones.promedio.toFixed(1)} / 5</strong></div>
-                  <div className="rating-summary-card"><span>Reseñas recibidas</span><strong>{resumenCalificaciones.total}</strong></div>
-                  <div className="rating-summary-card"><span>Por responder</span><strong>{resumenCalificaciones.pendientes_respuesta}</strong></div>
-                </div>
-
-                {errorCalificacionesTab && <div className="alert alert-danger" role="alert">{errorCalificacionesTab}</div>}
-
-                {cargandoCalificacionesTab ? (
-                  <div className="rating-empty-state">Cargando calificaciones...</div>
-                ) : calificaciones.length === 0 ? (
-                  <div className="rating-empty-state">
-                    <h3>Aún no tienes calificaciones</h3>
-                    <p>Las reseñas aparecerán aquí cuando tus clientes califiquen un servicio finalizado.</p>
+                ) : reportes.length === 0 ? (
+                  <div className="text-center py-5">
+                    <p style={{ color: "var(--color-texto-mutado)" }}>No hay reportes recibidos.</p>
                   </div>
                 ) : (
-                  <div className="d-flex flex-column gap-3">
-                    {calificaciones.map((calificacion) => (
-                      <article className="rating-review-card" key={calificacion.id}>
-                        <div className="d-flex flex-wrap justify-content-between gap-2">
-                          <div>
-                            <h3 className="rating-client-name">{calificacion.cliente}</h3>
-                            <p className="rating-service-name mb-0">{calificacion.nombre_servicio}</p>
-                          </div>
-                          <div className="text-md-end">
-                            <div className="rating-stars" aria-label={`${calificacion.puntuacion} de 5 estrellas`}>
-                              {"★".repeat(calificacion.puntuacion)}<span>{"★".repeat(5 - calificacion.puntuacion)}</span>
-                            </div>
-                            <small className="text-muted">{formatearFecha(calificacion.created_at)}</small>
+                  reportes.map((r) => (
+                    <div key={r.id} className="p-3 mb-3 rounded" style={{ border: "1px solid #E2E8F0" }}>
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px", textTransform: "uppercase", fontWeight: "700" }}>
+                            Cliente: <strong>{r.cliente_email}</strong>
+                          </p>
+                          
+                          
+                          <p style={{ fontSize: "12px", color: "#64748B", marginBottom: "8px", textTransform: "uppercase", fontWeight: "600" }}>
+                            Servicio implicado: <span style={{ color: "#0284C7" }}>
+                              {r.tipo_servicio === 'envio' ? r.nombre_envio : r.nombre_transporte}
+                            </span>
+                            <span className="ms-3">
+                              Fecha: <span style={{ color: "#0F172A" }}>
+                                {r.fecha_servicio ? new Date(r.fecha_servicio).toLocaleDateString('es-GT', { timeZone: 'UTC' }) : 'N/A'}
+                              </span>
+                            </span>
+                            <span className="ms-3">
+                              Monto: <span style={{ color: "#0F172A" }}>Q{r.precio_total || '0.00'}</span>
+                            </span>
+                          </p>
+                          
+
+                          <h5 className="fw-bold mb-0" style={{ color: "var(--color-secundario)", fontSize: "16px" }}>{r.motivo}</h5>
+                        </div>
+                        <span style={{
+                          fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
+                          padding: "4px 10px", borderRadius: "20px",
+                          backgroundColor: r.estado === "enviado" ? "#DBEAFE" : r.estado === "en_revision" ? "#FEF9C3" : r.estado === "aceptado" ? "#DCFCE7" : "#FEE2E2",
+                          color: r.estado === "enviado" ? "#1D4ED8" : r.estado === "en_revision" ? "#854D0E" : r.estado === "aceptado" ? "#166534" : "#991B1B"
+                        }}>
+                          {r.estado ? r.estado.replace("_", " ") : "ENVIADO"}
+                        </span>
+                      </div>
+                      
+                      <div style={{ backgroundColor: "#F8FAFC", padding: "12px", borderRadius: "6px", border: "1px solid #E2E8F0", marginTop: "12px", marginBottom: "12px" }}>
+                        <p style={{ fontSize: "13px", color: "var(--color-secundario)", margin: 0, fontStyle: "italic" }}>"{r.descripcion}"</p>
+                      </div>
+
+                      <div className="d-flex justify-content-between align-items-center mt-2">
+                        <small style={{ color: "var(--color-texto-mutado)", fontSize: "12px" }}>
+                          Fecha: {r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-GT', { timeZone: 'UTC' }) : 'Fecha no disponible'}
+                        </small>
+                        {r.evidencia && (
+                          <a href={`http://localhost:3000${r.evidencia}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#2563EB", textDecoration: "underline", fontWeight: "600" }}>
+                            Ver evidencia adjunta
+                          </a>
+                        )}
+                      </div>
+
+                    
+                      <div className="d-flex gap-2 mt-3 pt-2" style={{ borderTop: "1px dashed #E2E8F0" }}>
+                        {r.estado === 'enviado' && (
+                          <button
+                            className="btn btn-sm"
+                            style={{ backgroundColor: "#FEF9C3", color: "#854D0E", border: "1px solid #FDE047", fontWeight: "600" }}
+                            onClick={() => cambiarEstadoReporte(r.id, "en_revision")}
+                          >
+                            Poner en Estudio
+                          </button>
+                        )}
+                        {(r.estado === 'enviado' || r.estado === 'en_revision') && (
+                          <>
+                            <button
+                              className="btn btn-sm"
+                              style={{ backgroundColor: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: "600" }}
+                              onClick={() => cambiarEstadoReporte(r.id, "aceptado")}
+                            >
+                              Aceptar
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              style={{ backgroundColor: "#FEE2E2", color: "#991B1B", border: "1px solid #FECACA", fontWeight: "600" }}
+                              onClick={() => cambiarEstadoReporte(r.id, "rechazado")}
+                            >
+                              Rechazar
+                            </button>
+
+                            <button 
+                              className="btn btn-sm ms-2" 
+                              style={{ backgroundColor: "#BAE6FD", color: "#0369A1", fontWeight: "600", border: "none" }}
+                              onClick={() => {
+                                setReporteAResponder(reporteAResponder === r.id ? null : r.id);
+                                setTextoRespuesta(r.respuesta_empresa || ''); 
+                              }}
+                            >
+                              Responder
+                            </button>
+                          </>
+                        )}
+                      </div> 
+
+                      {reporteAResponder === r.id && (
+                        <div className="mt-3 p-3 rounded w-100" style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                          <p style={{ fontSize: "12px", fontWeight: "bold", color: "#475569", marginBottom: "8px" }}>Tu respuesta al cliente:</p>
+                          <textarea 
+                            className="form-control mb-2" 
+                            rows="2" 
+                            style={{ fontSize: "13px", resize: "none" }}
+                            placeholder="Escribe los detalles de la resolución aquí..."
+                            value={textoRespuesta}
+                            onChange={(e) => setTextoRespuesta(e.target.value)}
+                          ></textarea>
+                          <div className="text-end">
+                            <button 
+                              className="btn btn-sm" 
+                              style={{ backgroundColor: "#0284C7", color: "white", fontSize: "12px" }}
+                              onClick={() => enviarRespuestaReporte(r.id)}
+                            >
+                              Enviar Respuesta
+                            </button>
                           </div>
                         </div>
+                      )}
 
-                        <p className="rating-comment">{calificacion.comentario || "El cliente no dejó un comentario."}</p>
-
-                        {calificacion.respuesta_id ? (
-                          <div className="rating-response">
-                            <strong>Tu respuesta</strong>
-                            <p>{calificacion.respuesta}</p>
-                            <small>{formatearFecha(calificacion.respuesta_created_at)}</small>
-                          </div>
-                        ) : (
-                          <div className="rating-response-form">
-                            <label htmlFor={`respuesta-${calificacion.id}`} className="form-label fw-bold">Responder al cliente</label>
-                            <textarea
-                              id={`respuesta-${calificacion.id}`}
-                              className="form-control"
-                              rows="3"
-                              maxLength="1000"
-                              placeholder="Agradece el comentario o aclara la situación de forma profesional."
-                              value={respuestas[calificacion.id] || ""}
-                              onChange={(evento) => setRespuestas((actuales) => ({ ...actuales, [calificacion.id]: evento.target.value }))}
-                              disabled={respondiendoId === calificacion.id}
-                            />
-                            <div className="d-flex justify-content-between align-items-center mt-2">
-                              <small className="text-muted">{(respuestas[calificacion.id] || "").length} / 1000</small>
-                              <button type="button" className="btn btn-primary btn-sm" onClick={() => responderCalificacion(calificacion.id)} disabled={respondiendoId === calificacion.id}>
-                                {respondiendoId === calificacion.id ? "Publicando..." : "Publicar respuesta"}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </article>
-                    ))}
-                  </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>
