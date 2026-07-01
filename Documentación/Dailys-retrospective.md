@@ -400,3 +400,195 @@ Fecha: 22 Junio 2026
 | Que mejorar | Hacer pulls de develop con mas frecuencia para reducir la cantidad de conflictos al momento de hacer merge. |
 
 ![Sprint Retrospective 2](sprint%20retrospective%202.jpg)
+
+---
+---
+---
+
+# Sprint Planning 3
+
+Se organizó el trabajo del tercer y último sprint con el objetivo de finalizar e integrar el módulo de clientes (búsqueda y filtros, pasarela de pago simulada, Luhn manual, persistencia del carrito, cupones de descuento, cancelaciones con reembolso), la moderación y bitácora de logs del administrador, la carga masiva de flota, el reporte de problemas, las gráficas estadísticas avanzadas en PDF y las pruebas de integración E2E automatizadas.
+
+### Integrante 1: Maria Fernanda Morales Lima - 202300378
+Se encargará de implementar el perfil del cliente con edición de datos, la gestión de cupones desde el lado del cliente (canje y validación al momento de pagar), y el rediseño de estilos CSS de toda la interfaz del cliente aplicando los principios heurísticos de Nielsen.
+
+### Integrante 2: Josue David Figueroa Acosta - 202307378
+Trabajará en el motor de búsqueda y filtrado de servicios de envío y rutas de transporte para los clientes, implementando filtros por precio, calificación, capacidad de carga, horarios, y el algoritmo de sugerencias cruzadas.
+
+### Integrante 3: Bryan Alejandro Anona Paredes - 202307272
+Se encargará de desarrollar la persistencia del carrito de compras en la base de datos, la pasarela de pagos simulada (tarjeta y wallet) y la validación de reembolsos por cancelación con al menos 24 horas de anticipación.
+
+### Integrante 4: Susana Paola González Contreras - 202000576
+Implementará el flujo de calificaciones y comentarios sobre servicios completados, la creación de quejas y reportes con evidencias fotográficas por parte de clientes y operadores, y la visualización de reportes recibidos en los dashboards de los proveedores.
+
+### Integrante 5: Melvin Geovanni García Sumalá - 202300712
+Se enfocará en dockerizar la aplicación completa, configurar la integración continua mediante GitHub Actions (CI/CD), implementar la moderación y bitácora de logs de auditoría del administrador, desarrollar el dashboard de gráficas estadísticas (SVG) y descarga de PDFs del administrador, y coordinar las pruebas unitarias y de integración E2E.
+
+![Sprint Planning 3](sprint%20retrospective%202.jpg)
+
+
+---
+
+# Daily Scrum — Sprint 3 — Día 1
+
+Fecha: 27 Junio 2026
+
+### Integrante 1: Maria Fernanda Morales Lima - 202300378
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Estudié las guías de los principios de Nielsen para planificar la reestructuración visual del módulo de clientes. |
+| **¿Qué haré hoy?** | Desarrollaré la vista de perfil de usuario y la lógica de edición de datos, además de programar los endpoints de backend para cupones del cliente. |
+| **¿Impedimentos?** | El flujo para validar cupones requiere persistir el estado de canjeado para evitar doble uso; diseñaré una tabla intermedia en la base de datos. |
+
+### Integrante 2: Josue David Figueroa Acosta - 202307378
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Planifiqué el maquetado del catálogo de envíos y transportes en la interfaz del cliente. |
+| **¿Qué haré hoy?** | Codificaré la barra de búsqueda y los selectores de ordenamiento (precio, capacidad, calificación) en la vista de clientes. |
+| **¿Impedimentos?** | Ninguno. Las consultas básicas del catálogo de transporte ya están listas. |
+
+### Integrante 3: Bryan Alejandro Anona Paredes - 202307272
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Creé las tablas correspondientes para el carrito de compras y las transacciones de pago en PostgreSQL. |
+| **¿Qué haré hoy?** | Conectaré el carrito del cliente para que persista en el servidor y comenzaré a codificar el flujo de cobros de la pasarela simulada. |
+| **¿Impedimentos?** | Debo asegurar que las reservaciones queden bloqueadas hasta que el pago de la tarjeta pase la validación manual de Luhn. |
+
+### Integrante 4: Susana Paola González Contreras - 202000576
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Diseñé las interfaces de usuario para calificar servicios completados y reportar problemas con evidencias. |
+| **¿Qué haré hoy?** | Programar la subida de evidencias usando Multer e integrar la pestaña de reportes en los dashboards de proveedores. |
+| **¿Impedimentos?** | La manipulación de archivos binarios (fotos de evidencias) en Express me generó problemas de permisos; lo resolveré con Melvin. |
+
+### Integrante 5: Melvin Geovanni García Sumalá - 202300712
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Creé los archivos Dockerfile para compilar y dockerizar de manera independiente el frontend y el backend. |
+| **¿Qué haré hoy?** | Configuraré el flujo de CI/CD con GitHub Actions para automatizar las compilaciones y comenzaré a programar el endpoint de bitácora de logs. |
+| **¿Impedimentos?** | El pipeline de GitHub Actions falló inicialmente por sincronización del archivo package-lock.json; corregiré el lockfile local. |
+
+---
+
+# Daily Scrum — Sprint 3 — Día 2
+
+Fecha: 28 Junio 2026
+
+### Integrante 1: Maria Fernanda Morales Lima - 202300378
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Finalicé el perfil del cliente, la inserción y canje de cupones, y agregué modales estilizados de confirmación antes de guardar. |
+| **¿Qué haré hoy?** | Iniciaré el rediseño estético y de usabilidad del módulo de clientes aplicando los 10 principios de Nielsen. |
+| **¿Impedimentos?** | La paleta de colores del CSS global chocaba con los estilos de Nielsen; tendré que sobreescribir variables CSS locales. |
+
+### Integrante 2: Josue David Figueroa Acosta - 202307378
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Desarrollé la búsqueda y los filtros de ordenamiento en la interfaz del cliente. |
+| **¿Qué haré hoy?** | Implementaré las sugerencias cruzadas (mejores 3 operadores/transportes) cuando el usuario selecciona un servicio. |
+| **¿Impedimentos?** | El cálculo de la distancia o zona requirió ajustar la base de datos para que los destinos coincidan de manera exacta. |
+
+### Integrante 3: Bryan Alejandro Anona Paredes - 202307272
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Terminé la persistencia del carrito y la validación Luhn en el cliente. |
+| **¿Qué haré hoy?** | Codificaré el sistema de reembolso y la validación de cancelación con 24 horas de anticipación. |
+| **¿Impedimentos?** | El cálculo de diferencias de fechas en PostgreSQL requirió usar la función EXTRACT(EPOCH FROM ...) para comparar horas exactas de forma confiable. |
+
+### Integrante 4: Susana Paola González Contreras - 202000576
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Logré arreglar la carga de evidencias con Multer y finalicé la sección de calificaciones. |
+| **¿Qué haré hoy?** | Terminaré la vista del dashboard de reportes del cliente e integraré las respuestas de reportes para el operador. |
+| **¿Impedimentos?** | Ninguno por el momento, la carga de fotos ya funciona correctamente. |
+
+### Integrante 5: Melvin Geovanni García Sumalá - 202300712
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Corregí las acciones de CI/CD y programé los disparadores en PostgreSQL para poblar la bitácora de logs automáticamente. |
+| **¿Qué haré hoy?** | Reconstruiré el dashboard estadístico del administrador para que muestre las 6 gráficas SVG requeridas y programaré la descarga de los 11 reportes PDF. |
+| **¿Impedimentos?** | La descarga de PDFs con tablas anidadas y gráficos consumía mucha memoria en el navegador; optimizaré el uso de html2canvas y jspdf. |
+
+---
+
+# Daily Scrum — Sprint 3 — Día 3
+
+Fecha: 29 Junio 2026
+
+### Integrante 1: Maria Fernanda Morales Lima - 202300378
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Completé la reestructuración estética de clientes bajo Nielsen, agregando microanimaciones y alertas visuales claras. |
+| **¿Qué haré hoy?** | Coordinaré con Bryan para verificar el correcto descuento de cupones en la pasarela de pagos y apoyaré en el manual técnico. |
+| **¿Impedimentos?** | Ninguno, los estilos responsivos funcionan perfectamente. |
+
+### Integrante 2: Josue David Figueroa Acosta - 202307378
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Finalicé la lógica de sugerencias cruzadas y el catálogo de envíos/transportes. |
+| **¿Qué haré hoy?** | Integraré mis vistas con la pasarela de pagos y me uniré a las pruebas finales del sprint. |
+| **¿Impedimentos?** | Al hacer merge, detectamos que faltaba definir los endpoints en el backend para resolver búsquedas del cliente; Melvin me ayudará a crearlos. |
+
+### Integrante 3: Bryan Alejandro Anona Paredes - 202307272
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Implementé la cancelación con reembolso automático y la validación de 24 horas antes del servicio. |
+| **¿Qué haré hoy?** | Realizaré pruebas completas de pasarela de pago simulada (tarjeta y wallet) y escribiré pruebas unitarias. |
+| **¿Impedimentos?** | Ninguno, las transacciones y balances simulan los descuentos y reembolsos de forma correcta en la base de datos. |
+
+### Integrante 4: Susana Paola González Contreras - 202000576
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Terminé el listado de calificaciones en operador y empresa, y la moderación de quejas. |
+| **¿Qué haré hoy?** | Escribiré las pruebas unitarias y e2e de calificaciones y reportes recibidos. |
+| **¿Impedimentos?** | Ninguno. |
+
+### Integrante 5: Melvin Geovanni García Sumalá - 202300712
+| Pregunta | Respuesta |
+| --- | --- |
+| **¿Qué hice ayer?** | Completé la descarga de los 11 reportes en PDF y el panel de estadísticas y moderación en el administrador. |
+| **¿Qué haré hoy?** | Implementaré los endpoints faltantes de búsqueda del cliente, corregiré los modales de alerta de empresa y operador con SweetAlert2, y realizaré la suite de pruebas E2E visuales (headed) y el manual técnico. |
+| **¿Impedimentos?** | Ninguno. El sistema ya está 100% integrado y estable. |
+
+---
+
+# Sprint Retrospective 3
+
+## Maria Fernanda Morales Lima
+**Carnet:** 202300378
+**Responsabilidad:** Perfil de cliente, cupones y principios Nielsen
+* **Qué hice bien:** Integré el flujo de perfil y cupones con modales explicativos y logré rediseñar todo el módulo de cliente aplicando los principios de Nielsen, logrando una interfaz limpia y responsiva.
+* **Qué hice mal:** Perdí tiempo reescribiendo estilos globales que chocaban con los míos.
+* **Qué mejorar:** Definir y separar hojas de estilos de vistas específicas desde el inicio para evitar sobreescribir clases de Bootstrap o globales.
+
+## Bryan Alejandro Anona Paredes
+**Carnet:** 202307272
+**Responsabilidad:** Carrito persistente, pagos y reembolsos
+* **Qué hice bien:** Desarrollé el carrito en base de datos de manera que persiste en cualquier dispositivo, y validé correctamente los reembolsos automáticos al cancelar.
+* **Qué hice mal:** El cálculo de zonas horarias al comparar la diferencia de 24 horas causó fallas de prueba en el backend inicialmente.
+* **Qué mejorar:** Utilizar fechas UTC en el backend desde el principio para evitar desajustes de horas locales entre el frontend y el servidor.
+
+## Josue David Figueroa Acosta
+**Carnet:** 202307378
+**Responsabilidad:** Búsqueda, filtros y recomendaciones cruzadas
+* **Qué hice bien:** Implementé el catálogo de transporte y envíos con filtros robustos de ordenamiento y el sistema de recomendación cruzada en el frontend.
+* **Qué hice mal:** Olvidé crear e integrar los endpoints del backend para las búsquedas, asumiendo que ya existían.
+* **Qué mejorar:** Acordar con el backend los contratos de API y endpoints específicos antes de desarrollar la funcionalidad en el frontend.
+
+## Susana Paola González Contreras
+**Carnet:** 202000576
+**Responsabilidad:** Calificaciones y reportes de quejas
+* **Qué hice bien:** Completé el flujo completo de reportes con carga de fotos/videos mediante Multer, y la vista de reportes en los dashboards de proveedores.
+* **Qué hice mal:** Demoré resolviendo la configuración de la carpeta de almacenamiento temporal de Multer por problemas de permisos del sistema de archivos.
+* **Qué mejorar:** Consultar las directrices de permisos de carpetas dockerizadas desde el inicio para evitar bloqueos en subidas de archivos.
+
+## Melvin Geovanni García Sumalá
+**Carnet:** 202300712
+**Responsabilidad:** Docker, CI/CD, Estadísticas admin, Bitácora y pruebas E2E/Unitarias
+* **Qué hice bien:** Dockericé completamente la aplicación, configuré la bitácora de logs automática, las 6 gráficas SVG, 11 descargas PDF y reescribí las pruebas E2E para simular flujos reales de usuario de forma visual (headed).
+* **Qué hice mal:** Perdí tiempo configurando el package-lock.json en la CI/CD al inicio del sprint.
+* **Qué mejorar:** Asegurar la sincronización de archivos de lockfile antes de subir commits a develop para evitar caídas en el build.
+
+![Sprint Retrospective 3](retrospective3.jpeg)
+---
+

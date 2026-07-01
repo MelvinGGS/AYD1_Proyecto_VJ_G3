@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import "../../estilos/topNavbar.css";
 
 function DashboardEmpresa() {
@@ -44,6 +45,10 @@ function DashboardEmpresa() {
   const [archivoCSVFlota, setArchivoCSVFlota] = useState(null);
 
 
+  // reportes
+  const [reporteAResponder, setReporteAResponder] = useState(null);
+  const [textoRespuesta, setTextoRespuesta] = useState('');
+
   // ESTADOS PARA EL MODAL DE CANCELACIÓN
   const [modalCancelacion, setModalCancelacion] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
@@ -81,7 +86,7 @@ function DashboardEmpresa() {
 
   const cargarReportes = async () => {
     try {
-      const res = await fetch("http://localhost:3000/api/empresa/reportes", {
+      const res = await fetch(`http://localhost:3000/api/reportes/empresa/${empresaId}`, {
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
       });
       const data = await res.json();
@@ -90,6 +95,28 @@ function DashboardEmpresa() {
       console.error("Error al cargar reportes", error);
     }
   };
+
+const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/reportes/${reporteId}/estado`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify({ estado: nuevoEstado })
+      });
+      const data = await res.json();
+      if (data.success) {
+        cargarReportes(); 
+      } else {
+        Swal.fire({ title: "Error", text: data.message, icon: "error" });
+      }
+    } catch (error) {
+      console.error("Error al cambiar estado del reporte", error);
+    }
+  };
+
 
   const cargarReporteGanancias = async () => {
     try {
@@ -238,7 +265,6 @@ function DashboardEmpresa() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${localStorage.getItem("token")}`
         },
-        // YA NO ENVIAMOS empresa_id AQUÍ
         body: JSON.stringify({
           tipo_servicio: "Estandar",
           ...formularioRuta
@@ -246,24 +272,26 @@ function DashboardEmpresa() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message);
+        Swal.fire({ title: "Éxito", text: data.message, icon: "success" });
         setFormularioRuta({ nombre_ruta: "", origen: "", destino: "", precio: "", tiempo_estimado: "" });
         setRutaEditandoId(null);
         cargarRutas();
       } else {
-        alert("Error: " + data.message);
+        Swal.fire({ title: "Error", text: data.message, icon: "error" });
       }
     } catch (error) {
-      alert("Error de conexión al guardar la ruta.");
+      Swal.fire({ title: "Error de conexión", text: "Error de conexión al guardar la ruta.", icon: "error" });
     }
   };
 
   const manejarSubidaCSV = async () => {
-    if (!archivoCSV) return alert("Por favor selecciona un archivo CSV.");
+    if (!archivoCSV) {
+      Swal.fire({ title: "Advertencia", text: "Por favor selecciona un archivo CSV.", icon: "warning" });
+      return;
+    }
 
     const formData = new FormData();
     formData.append("archivo_csv", archivoCSV);
-    // YA NO AGREGAMOS empresa_id AL FORMDATA
 
     try {
       const res = await fetch("http://localhost:3000/api/rutas/csv", {
@@ -275,14 +303,14 @@ function DashboardEmpresa() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message);
+        Swal.fire({ title: "Éxito", text: data.message, icon: "success" });
         setArchivoCSV(null);
         cargarRutas();
       } else {
-        alert("Error: " + data.message);
+        Swal.fire({ title: "Error", text: data.message, icon: "error" });
       }
     } catch (error) {
-      alert("Error de conexión al subir CSV.");
+      Swal.fire({ title: "Error de conexión", text: "Error de conexión al subir CSV.", icon: "error" });
     }
   };
 
@@ -294,16 +322,16 @@ function DashboardEmpresa() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${localStorage.getItem("token")}`
         },
-        // YA NO ENVIAMOS empresa_id AQUÍ
+
         body: JSON.stringify({ nuevo_estado: nuevoEstado, motivo_cancelacion: motivo })
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message);
+        Swal.fire({ title: "Éxito", text: data.message, icon: "success" });
         cargarRutas();
       }
     } catch (error) {
-      alert("Error al cambiar estado.");
+      Swal.fire({ title: "Error", text: "Error al cambiar estado.", icon: "error" });
     }
   };
 
@@ -454,6 +482,34 @@ function DashboardEmpresa() {
     } catch (error) {
       console.error("Error al desactivar cupón", error);
     }
+  };
+
+
+const enviarRespuestaReporte = async (reporteId) => {
+      if (!textoRespuesta.trim()) return; 
+      
+      try {
+
+          const res = await fetch(`http://localhost:3000/api/reportes/${reporteId}/responder`, {
+              method: 'PUT',
+              headers: { 
+                  'Content-Type': 'application/json',
+                 
+                  'Authorization': `Bearer ${localStorage.getItem('token')}` 
+              },
+              body: JSON.stringify({ respuesta: textoRespuesta })
+          });
+          
+          const data = await res.json();
+          
+          if (data.success) {
+              setReporteAResponder(null);
+              setTextoRespuesta('');
+              cargarReportes(); 
+          }
+      } catch (error) {
+          console.error("Error al enviar la respuesta:", error);
+      }
   };
 
   return (
@@ -963,7 +1019,7 @@ function DashboardEmpresa() {
               ))}
             </div>
 
-            {/* Reportes de clientes */}
+{/* Reportes de clientes */}
             {vistaReporte === "recibidos" && (
               <div className="dashboard-card-custom">
                 <h2 className="dashboard-card-title">Reportes Recibidos de Clientes</h2>
@@ -979,27 +1035,121 @@ function DashboardEmpresa() {
                     <div key={r.id} className="p-3 mb-3 rounded" style={{ border: "1px solid #E2E8F0" }}>
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div>
-                          <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px" }}>
+                          <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px", textTransform: "uppercase", fontWeight: "700" }}>
                             Cliente: <strong>{r.cliente_email}</strong>
                           </p>
-                          <h5 className="fw-bold mb-0" style={{ color: "var(--color-secundario)" }}>{r.motivo}</h5>
+                          
+                          <p style={{ fontSize: "12px", color: "#64748B", marginBottom: "8px", textTransform: "uppercase", fontWeight: "600" }}>
+                            Servicio implicado: <span style={{ color: "#0284C7" }}>
+                              {r.tipo_servicio === 'envio' ? r.nombre_envio : r.nombre_transporte}
+                            </span>
+                            <span className="ms-3">
+                              Fecha: <span style={{ color: "#0F172A" }}>
+                                {r.fecha_servicio ? new Date(r.fecha_servicio).toLocaleDateString('es-GT', { timeZone: 'UTC' }) : 'N/A'}
+                              </span>
+                            </span>
+                            <span className="ms-3">
+                              Monto: <span style={{ color: "#0F172A" }}>Q{r.precio_total || '0.00'}</span>
+                            </span>
+                          </p>
+
+                          <h5 className="fw-bold mb-0" style={{ color: "var(--color-secundario)", fontSize: "16px" }}>{r.motivo}</h5>
                         </div>
                         <span style={{
                           fontSize: "11px", fontWeight: "700", textTransform: "uppercase",
-                          padding: "3px 10px", borderRadius: "20px",
+                          padding: "4px 10px", borderRadius: "20px",
                           backgroundColor: r.estado === "enviado" ? "#DBEAFE" : r.estado === "en_revision" ? "#FEF9C3" : r.estado === "aceptado" ? "#DCFCE7" : "#FEE2E2",
                           color: r.estado === "enviado" ? "#1D4ED8" : r.estado === "en_revision" ? "#854D0E" : r.estado === "aceptado" ? "#166534" : "#991B1B"
                         }}>
-                          {r.estado.replace("_", " ")}
+                          {r.estado ? r.estado.replace("_", " ") : "ENVIADO"}
                         </span>
                       </div>
-                      <p style={{ fontSize: "13px", color: "var(--color-texto-mutado)" }}>{r.descripcion}</p>
-                      <small style={{ color: "var(--color-texto-mutado)" }}>{new Date(r.created_at).toLocaleDateString()}</small>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+                      
+                      <div style={{ backgroundColor: "#F8FAFC", padding: "12px", borderRadius: "6px", border: "1px solid #E2E8F0", marginTop: "12px", marginBottom: "12px" }}>
+                        <p style={{ fontSize: "13px", color: "var(--color-secundario)", margin: 0, fontStyle: "italic" }}>"{r.descripcion}"</p>
+                      </div>
+
+                      <div className="d-flex justify-content-between align-items-center mt-2">
+                        <small style={{ color: "var(--color-texto-mutado)", fontSize: "12px" }}>
+                          Fecha: {r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-GT', { timeZone: 'UTC' }) : 'Fecha no disponible'}
+                        </small>
+                        {r.evidencia && (
+                          <a href={`http://localhost:3000${r.evidencia}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#2563EB", textDecoration: "underline", fontWeight: "600" }}>
+                            Ver evidencia adjunta
+                          </a>
+                        )}
+                      </div>
+
+                      {/* BOTONES DE GESTIÓN DE LA EMPRESA */}
+                    <div className="d-flex gap-2 mt-3 pt-2" style={{ borderTop: "1px dashed #E2E8F0" }}>
+                      {r.estado === 'enviado' && (
+                        <button
+                          className="btn btn-sm"
+                          style={{ backgroundColor: "#FEF9C3", color: "#854D0E", border: "1px solid #FDE047", fontWeight: "600" }}
+                          onClick={() => cambiarEstadoReporte(r.id, "en_revision")}
+                        >
+                          Poner en Estudio
+                        </button>
+                      )}
+                      {(r.estado === 'enviado' || r.estado === 'en_revision') && (
+                        <>
+                          <button
+                            className="btn btn-sm"
+                            style={{ backgroundColor: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: "600" }}
+                            onClick={() => cambiarEstadoReporte(r.id, "aceptado")}
+                          >
+                            Aceptar
+                          </button>
+                          <button
+                            className="btn btn-sm"
+                            style={{ backgroundColor: "#FEE2E2", color: "#991B1B", border: "1px solid #FECACA", fontWeight: "600" }}
+                            onClick={() => cambiarEstadoReporte(r.id, "rechazado")}
+                          >
+                            Rechazar
+                          </button>
+
+                          <button 
+                            className="btn btn-sm ms-2" 
+                            style={{ backgroundColor: "#BAE6FD", color: "#0369A1", fontWeight: "600", border: "none" }}
+                            onClick={() => {
+                              setReporteAResponder(reporteAResponder === r.id ? null : r.id);
+                              setTextoRespuesta(r.respuesta_empresa || ''); 
+                            }}
+                          >
+                            Responder
+                          </button>
+                        </>
+                      )}
+                    </div> 
+
+                    {reporteAResponder === r.id && (
+                      <div className="mt-3 p-3 rounded w-100" style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <p style={{ fontSize: "12px", fontWeight: "bold", color: "#475569", marginBottom: "8px" }}>Tu respuesta al cliente:</p>
+                        <textarea 
+                          className="form-control mb-2" 
+                          rows="2" 
+                          style={{ fontSize: "13px", resize: "none" }}
+                          placeholder="Escribe los detalles de la resolución aquí..."
+                          value={textoRespuesta}
+                          onChange={(e) => setTextoRespuesta(e.target.value)}
+                        ></textarea>
+                        <div className="text-end">
+                          <button 
+                            className="btn btn-sm" 
+                            style={{ backgroundColor: "#0284C7", color: "white", fontSize: "12px" }}
+                            onClick={() => enviarRespuestaReporte(r.id)}
+                          >
+                            Enviar Respuesta
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                ))
+              )}
+            </div>
+          )}
 
             {/* Ganancias */}
             {vistaReporte === "ganancias" && (
@@ -1100,7 +1250,20 @@ function DashboardEmpresa() {
                           <div key={c.id} className="p-3 mb-2 rounded" style={{ border: "1px solid #E2E8F0" }}>
                             <div className="d-flex justify-content-between mb-1">
                               <span className="fw-bold" style={{ color: "var(--color-secundario)", fontSize: "13px" }}>{c.cliente_email}</span>
-                              <span style={{ color: "var(--color-primario)", fontWeight: "700" }}>{"⭐".repeat(c.puntuacion)}{"☆".repeat(5 - c.puntuacion)}</span>
+                              <div style={{ display: "flex", gap: "2px" }}>
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <span
+                                    key={star}
+                                    style={{
+                                      fontSize: "20px",
+                                      color: star <= c.puntuacion ? "#F59E0B" : "#E2E8F0",
+                                      lineHeight: "1"
+                                    }}
+                                  >
+                                    ★
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                             <p style={{ fontSize: "12px", color: "var(--color-texto-mutado)", marginBottom: "2px" }}>{c.nombre_ruta}</p>
                             {c.comentario && <p style={{ fontSize: "13px", color: "var(--color-secundario)", margin: 0 }}>{c.comentario}</p>}
@@ -1571,7 +1734,10 @@ function DashboardEmpresa() {
               <button
                 className="btn btn-danger"
                 onClick={() => {
-                  if (!motivoCancelacion.trim()) return alert("Por favor, ingresa un motivo para notificar a los clientes.");
+                  if (!motivoCancelacion.trim()) {
+                    Swal.fire({ title: "Advertencia", text: "Por favor, ingresa un motivo para notificar a los clientes.", icon: "warning" });
+                    return;
+                  }
                   cambiarEstadoRuta(modalCancelacion, "cancelada", motivoCancelacion);
                   setModalCancelacion(null);
                   setMotivoCancelacion("");

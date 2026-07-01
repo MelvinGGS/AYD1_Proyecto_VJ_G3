@@ -6,6 +6,13 @@ import SolicitudesEmpresas from "./componentes/SolicitudesEmpresas";
 import RegistrarAdminForm from "./componentes/RegistrarAdminForm";
 import SolicitudesCambioPerfil from "./componentes/SolicitudesCambioPerfil";
 
+// Componentes modulares
+import ReportesQuejas from "./componentes/ReportesQuejas";
+import GestionUsuarios from "./componentes/GestionUsuarios";
+import VisualizacionOperaciones from "./componentes/VisualizacionOperaciones";
+import EstadisticasAdmin from "./componentes/EstadisticasAdmin";
+import BitacoraLogs from "./componentes/BitacoraLogs";
+
 const API_URL = "http://localhost:3000/api/admin";
 
 const estadoTexto = {
@@ -292,6 +299,8 @@ function DashboardAdmin() {
     navigate("/");
   };
 
+  const isTabAprobaciones = vista === "operadores" || vista === "empresas";
+
   return (
     <main className="admin-page">
       <aside className="admin-sidebar">
@@ -316,6 +325,21 @@ function DashboardAdmin() {
           <button className={vista === "cambios_perfil" ? "active" : ""} onClick={() => cambiarVista("cambios_perfil")}>
             Cambios de Perfil
           </button>
+          <button className={vista === "reportes_quejas" ? "active" : ""} onClick={() => cambiarVista("reportes_quejas")}>
+            Quejas/Reportes
+          </button>
+          <button className={vista === "gestion_usuarios" ? "active" : ""} onClick={() => cambiarVista("gestion_usuarios")}>
+            Usuarios
+          </button>
+          <button className={vista === "visualizacion_operaciones" ? "active" : ""} onClick={() => cambiarVista("visualizacion_operaciones")}>
+            Visualizar Operaciones
+          </button>
+          <button className={vista === "estadisticas_admin" ? "active" : ""} onClick={() => cambiarVista("estadisticas_admin")}>
+            Estadisticas y PDFs
+          </button>
+          <button className={vista === "logs_actividad" ? "active" : ""} onClick={() => cambiarVista("logs_actividad")}>
+            Bitacora / Logs
+          </button>
         </nav>
 
         <button className="admin-logout" type="button" onClick={cerrarSesion}>
@@ -326,23 +350,30 @@ function DashboardAdmin() {
       <section className="admin-content">
         <header className="admin-header">
           <div>
-            <p className="admin-kicker">Modulo de aprobaciones</p>
+            <p className="admin-kicker">Panel de Administracion</p>
             <h2>
               {vista === "operadores" ? "Solicitudes de operadores"
                 : vista === "empresas" ? "Solicitudes de empresas"
                   : vista === "cambios_perfil" ? "Solicitudes de cambio de perfil"
-                    : "Registrar administrador"}
+                    : vista === "reportes_quejas" ? "Moderacion de quejas y reportes"
+                      : vista === "gestion_usuarios" ? "Gestion global de usuarios"
+                        : vista === "visualizacion_operaciones" ? "Visualizacion de datos operacionales"
+                          : vista === "estadisticas_admin" ? "Panel de estadisticas y descargas PDF"
+                            : vista === "logs_actividad" ? "Bitacora de actividad de auditoria"
+                              : "Registrar administrador"}
             </h2>
           </div>
-          <button className="admin-icon-button" type="button" onClick={cargarSolicitudes} disabled={cargando} title="Actualizar">
-            {cargando ? "..." : "R"}
-          </button>
+          {isTabAprobaciones && (
+            <button className="admin-icon-button" type="button" onClick={cargarSolicitudes} disabled={cargando} title="Actualizar">
+              {cargando ? "..." : "R"}
+            </button>
+          )}
         </header>
 
         {mensaje && <div className="admin-alert success">{mensaje}</div>}
         {error && <div className="admin-alert error">{error}</div>}
 
-        {vista !== "administradores" && vista !== "cambios_perfil" &&(
+        {isTabAprobaciones && (
           <>
             <section className="admin-metrics" aria-label="Resumen de solicitudes">
               <button type="button" className={filtroEstado === "por_aprobar" ? "active" : ""} onClick={() => setFiltroEstado("por_aprobar")}>
@@ -418,6 +449,27 @@ function DashboardAdmin() {
             registrarAdministrador={registrarAdministrador}
             accionando={accionando}
           />
+        )}
+
+        {/* Módulos Adicionales */}
+        {vista === "reportes_quejas" && (
+          <ReportesQuejas token={token} />
+        )}
+
+        {vista === "gestion_usuarios" && (
+          <GestionUsuarios token={token} />
+        )}
+
+        {vista === "visualizacion_operaciones" && (
+          <VisualizacionOperaciones token={token} />
+        )}
+
+        {vista === "estadisticas_admin" && (
+          <EstadisticasAdmin token={token} />
+        )}
+
+        {vista === "logs_actividad" && (
+          <BitacoraLogs token={token} />
         )}
       </section>
 
