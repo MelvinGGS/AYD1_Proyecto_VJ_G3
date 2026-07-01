@@ -1733,7 +1733,7 @@ const ejecutarPago = async () => {
               </p>
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                 <a
-                  href="https://mail.google.com/mail/?view=cm&to=soporte@trackflowhub.com&su=Soporte TrackFlow-HUB"
+                  href="https://mail.google.com/mail/?view=cm&to=eventcoreg3@gmail.com&su=Soporte TrackFlow-HUB"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-primario"

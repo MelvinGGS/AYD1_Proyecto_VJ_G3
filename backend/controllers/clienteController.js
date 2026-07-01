@@ -117,4 +117,162 @@ const validarCupon = async (req, res) => {
   }
 };
 
-module.exports = { obtenerPerfil, editarPerfil, listarCupones, validarCupon};
+const obtenerTransportes = async (req, res) => {
+  const { destino, fecha, empresa_id, tipo, orden } = req.query;
+  try {
+    let query = `
+      SELECT rt.*, et.nombre_empresa, COALESCE(rt.calificacion_promedio, 0) AS calificacion_empresa
+      FROM rutas_transporte rt
+      INNER JOIN empresas_transporte et ON et.id = rt.empresa_id
+      WHERE rt.estado = 'activa'
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    if (destino && destino.trim()) {
+      query += ` AND rt.destino ILIKE $${paramIndex}`;
+      params.push(`%${destino.trim()}%`);
+      paramIndex++;
+    }
+
+    if (fecha) {
+      const diasSemana = ['D', 'L', 'M', 'Mi', 'J', 'V', 'S'];
+      const diaAbreviatura = diasSemana[new Date(fecha).getUTCDay()];
+      query += ` AND rt.dias_disponibles ILIKE $${paramIndex}`;
+      params.push(`%${diaAbreviatura}%`);
+      paramIndex++;
+    }
+
+    if (empresa_id) {
+      query += ` AND rt.empresa_id = $${paramIndex}`;
+      params.push(empresa_id);
+      paramIndex++;
+    }
+
+    if (tipo) {
+      query += ` AND rt.tipo_servicio = $${paramIndex}`;
+      params.push(tipo);
+      paramIndex++;
+    }
+
+    // Sorting
+    if (orden === 'precio_asc') {
+      query += " ORDER BY rt.precio ASC";
+    } else if (orden === 'precio_desc') {
+      query += " ORDER BY rt.precio DESC";
+    } else if (orden === 'calificacion_desc' || orden === 'calificacion') {
+      query += " ORDER BY rt.calificacion_promedio DESC NULLS LAST";
+    } else if (orden === 'calificacion_asc') {
+      query += " ORDER BY rt.calificacion_promedio ASC NULLS LAST";
+    } else if (orden === 'tiempo_asc') {
+      query += " ORDER BY rt.tiempo_estimado ASC NULLS LAST";
+    } else if (orden === 'tiempo_desc') {
+      query += " ORDER BY rt.tiempo_estimado DESC NULLS LAST";
+    } else if (orden === 'hora_asc') {
+      query += " ORDER BY rt.hora_salida ASC NULLS LAST";
+    } else if (orden === 'hora_desc') {
+      query += " ORDER BY rt.hora_salida DESC NULLS LAST";
+    } else if (orden === 'empresa_asc') {
+      query += " ORDER BY et.nombre_empresa ASC";
+    } else if (orden === 'empresa_desc') {
+      query += " ORDER BY et.nombre_empresa DESC";
+    } else {
+      query += " ORDER BY rt.created_at DESC";
+    }
+
+    const { rows } = await db.pool.query(query, params);
+
+    // Get filters
+    const empresasRes = await db.pool.query(
+      `SELECT DISTINCT et.id, et.nombre_empresa 
+       FROM empresas_transporte et 
+       INNER JOIN rutas_transporte rt ON rt.empresa_id = et.id 
+       WHERE rt.estado = 'activa'`
+    );
+
+    const tiposRes = await db.pool.query(
+      `SELECT DISTINCT tipo_servicio FROM rutas_transporte WHERE estado = 'activa'`
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      filtros: {
+        empresas: empresasRes.rows,
+        tipos: tiposRes.rows.map(r => r.tipo_servicio)
+      }
+    });
+
+  } catch (error) {
+    console.error("Error al obtener transportes:", error);
+    res.status(500).json({ success: false, message: "Error al obtener transportes disponibles." });
+  }
+};
+
+const obtenerServiciosEnvio = async (req, res) => {
+  const { buscar, orden } = req.query;
+  try {
+    let query = `
+      SELECT se.*, (ol.nombre || ' ' || ol.apellido) AS operador, COALESCE(se.calificacion_promedio, 0) AS calificacion_promedio
+      FROM servicios_envio se
+      INNER JOIN operadores_logisticos ol ON ol.id = se.operador_id
+      WHERE se.estado = 'activo'
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    if (buscar && buscar.trim()) {
+      query += ` AND (se.nombre_servicio ILIKE $${paramIndex} OR se.descripcion ILIKE $${paramIndex} OR se.zona_cobertura ILIKE $${paramIndex} OR (ol.nombre || ' ' || ol.apellido) ILIKE $${paramIndex})`;
+      params.push(`%${buscar.trim()}%`);
+      paramIndex++;
+    }
+
+    if (orden === 'alfabetico') {
+      query += " ORDER BY se.nombre_servicio ASC";
+    } else if (orden === 'calificacion') {
+      query += " ORDER BY se.calificacion_promedio DESC NULLS LAST";
+    } else if (orden === 'precio_asc') {
+      query += " ORDER BY se.precio_envio ASC";
+    } else if (orden === 'precio_desc') {
+      query += " ORDER BY se.precio_envio DESC";
+    } else if (orden === 'capacidad') {
+      query += " ORDER BY se.capacidad_carga_kg DESC";
+    } else {
+      query += " ORDER BY se.created_at DESC";
+    }
+
+    const { rows } = await db.pool.query(query, params);
+
+    // Retrieve all photos for active services to embed them
+    const serviceIds = rows.map(r => r.id);
+    let photos = [];
+    if (serviceIds.length > 0) {
+      const photosRes = await db.pool.query(
+        `SELECT id, servicio_id, url_foto, descripcion, orden 
+         FROM fotos_servicio 
+         WHERE servicio_id = ANY($1) 
+         ORDER BY orden ASC`,
+        [serviceIds]
+      );
+      photos = photosRes.rows;
+    }
+
+    const servicesWithPhotos = rows.map(service => {
+      service.fotos = photos.filter(p => p.servicio_id === service.id);
+      service.precio_envio = parseFloat(service.precio_envio);
+      service.calificacion_promedio = parseFloat(service.calificacion_promedio);
+      return service;
+    });
+
+    res.json({
+      success: true,
+      data: servicesWithPhotos
+    });
+
+  } catch (error) {
+    console.error("Error al obtener servicios de envio:", error);
+    res.status(500).json({ success: false, message: "Error al obtener servicios de envio." });
+  }
+};
+
+module.exports = { obtenerPerfil, editarPerfil, listarCupones, validarCupon, obtenerTransportes, obtenerServiciosEnvio };
