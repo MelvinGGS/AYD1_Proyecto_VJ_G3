@@ -113,8 +113,31 @@ async function loginComoAdmin(page, email, password) {
   await page.waitForLoadState('networkidle');
 }
 
+async function loginComoCliente(page, email, password) {
+  const response = await page.request.post('http://localhost:3000/api/auth/login', {
+    data: { email, password }
+  });
+  
+  const body = await response.json();
+  
+  if (!body.success || !body.token) {
+    throw new Error(`Login failed: ${body.message || 'No token received'}`);
+  }
+  
+  await page.goto('/');
+  await page.evaluate((data) => {
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('rol', data.rol);
+    localStorage.setItem('id', data.id);
+  }, { token: body.token, rol: body.rol, id: body.data ? body.data.id : '' });
+  
+  await page.goto('/dashboard/cliente');
+  await page.waitForLoadState('networkidle');
+}
+
 module.exports = { 
   loginComoOperador,
   loginComoEmpresa,
-  loginComoAdmin
+  loginComoAdmin,
+  loginComoCliente
 };
