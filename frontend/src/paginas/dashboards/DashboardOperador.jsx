@@ -730,7 +730,7 @@ function DashboardOperador() {
       doc.save(`reporte_ganancias.pdf`);
     } catch (err) {
       console.error("Error generando PDF:", err);
-      alert("No se pudo generar el PDF.");
+      Swal.fire({ title: "Error", text: "No se pudo generar el PDF.", icon: "error" });
     }
   };
 
@@ -776,7 +776,7 @@ function DashboardOperador() {
       doc.save(`historial_clientes.pdf`);
     } catch (err) {
       console.error("Error generando PDF clientes:", err);
-      alert("No se pudo generar el PDF.");
+      Swal.fire({ title: "Error", text: "No se pudo generar el PDF.", icon: "error" });
     }
   };
 
@@ -835,7 +835,7 @@ function DashboardOperador() {
       doc.save(`reporte_calificaciones.pdf`);
     } catch (err) {
       console.error("Error generando PDF calificaciones:", err);
-      alert("No se pudo generar el PDF.");
+      Swal.fire({ title: "Error", text: "No se pudo generar el PDF.", icon: "error" });
     }
   };
 
@@ -930,7 +930,7 @@ function DashboardOperador() {
       doc.save(pdfName);
     } catch (err) {
       console.error('Error generando PDF por servicio:', err);
-      alert('No se pudo generar el PDF por servicio.');
+      Swal.fire({ title: "Error", text: "No se pudo generar el PDF por servicio.", icon: "error" });
     }
   };
 

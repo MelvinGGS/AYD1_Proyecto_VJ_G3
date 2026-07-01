@@ -1,25 +1,38 @@
 const { test, expect } = require('@playwright/test');
-const { loginComoEmpresa } = require('./helpers/auth');
+const { loginComoCliente } = require('./helpers/auth');
 
-const EMAIL = process.env.EMPRESA_EMAIL || '2070688520116@ingenieria.usac.edu.gt';
-const PASSWORD = process.env.EMPRESA_PASSWORD || 'Admin123@';
+const EMAIL = process.env.CLIENTE_EMAIL || 'melvinggs16@gmail.com';
+const PASSWORD = process.env.CLIENTE_PASSWORD || 'Admin123@';
 
-test.describe('Login y Logout de la Empresa - Carnet 202307272', () => {
-  test('Debe iniciar sesión, verificar el dashboard de la empresa y luego cerrar sesión', async ({ page }) => {
-    await loginComoEmpresa(page, EMAIL, PASSWORD);
+test.describe('Cliente - Editar Perfil - Carnet 202307272', () => {
+  test('Debe iniciar sesión como cliente, cambiar datos del perfil, confirmar y cerrar sesión', async ({ page }) => {
+    await loginComoCliente(page, EMAIL, PASSWORD);
     
-    // Verificar que estamos en el dashboard de la empresa
-    await expect(page.locator('text=TrackFlow-HUB')).toBeVisible({ timeout: 15000 });
+    // Verificar dashboard del cliente
+    await expect(page.locator('text=TrackFlow-HUB').first()).toBeVisible({ timeout: 15000 });
     
-    // Verificar que se ve la barra lateral de la empresa
-    await expect(page.locator('text=Inicio')).toBeVisible();
-    await expect(page.locator('text=Gestión de Rutas')).toBeVisible();
-    
-    // Hacer clic en Cerrar sesion
-    await page.locator('text=Cerrar sesion').click();
+    // Ir a Perfil - usando selector de botón exacto para evitar conflictos de múltiples elementos
+    await page.locator('button:has-text("Mi Perfil")').first().click();
     await page.waitForTimeout(1000);
     
-    // Verificar que redirige a la página de login (la URL de login en App.jsx es "/")
+    // Editar nombre
+    await page.locator('input[placeholder="Tu nombre"]').fill('Melvin Editado');
+    await page.locator('input[placeholder="Tu apellido"]').fill('Prueba Editada');
+    await page.locator('input[placeholder="44445555"]').fill('12345678');
+    
+    // Guardar cambios
+    await page.locator('text=Guardar Cambios').click();
+    await page.waitForTimeout(1000);
+    
+    // Confirmar modal
+    await page.locator('.modal-acciones >> text=Confirmar').click();
+    await page.waitForTimeout(1500);
+    
+    // Cerrar sesión
+    await page.locator('text=Cerrar Sesión').click();
+    await page.waitForTimeout(1000);
+    
+    // Verificar que redirige a login
     await expect(page).toHaveURL('http://localhost:5173/');
   });
 });

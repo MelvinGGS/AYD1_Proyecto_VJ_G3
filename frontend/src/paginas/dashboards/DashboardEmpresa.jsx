@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import "../../estilos/topNavbar.css";
 
 function DashboardEmpresa() {
@@ -109,7 +110,7 @@ const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
       if (data.success) {
         cargarReportes(); 
       } else {
-        alert("Error: " + data.message);
+        Swal.fire({ title: "Error", text: data.message, icon: "error" });
       }
     } catch (error) {
       console.error("Error al cambiar estado del reporte", error);
@@ -271,20 +272,23 @@ const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message);
+        Swal.fire({ title: "Éxito", text: data.message, icon: "success" });
         setFormularioRuta({ nombre_ruta: "", origen: "", destino: "", precio: "", tiempo_estimado: "" });
         setRutaEditandoId(null);
         cargarRutas();
       } else {
-        alert("Error: " + data.message);
+        Swal.fire({ title: "Error", text: data.message, icon: "error" });
       }
     } catch (error) {
-      alert("Error de conexión al guardar la ruta.");
+      Swal.fire({ title: "Error de conexión", text: "Error de conexión al guardar la ruta.", icon: "error" });
     }
   };
 
   const manejarSubidaCSV = async () => {
-    if (!archivoCSV) return alert("Por favor selecciona un archivo CSV.");
+    if (!archivoCSV) {
+      Swal.fire({ title: "Advertencia", text: "Por favor selecciona un archivo CSV.", icon: "warning" });
+      return;
+    }
 
     const formData = new FormData();
     formData.append("archivo_csv", archivoCSV);
@@ -299,14 +303,14 @@ const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message);
+        Swal.fire({ title: "Éxito", text: data.message, icon: "success" });
         setArchivoCSV(null);
         cargarRutas();
       } else {
-        alert("Error: " + data.message);
+        Swal.fire({ title: "Error", text: data.message, icon: "error" });
       }
     } catch (error) {
-      alert("Error de conexión al subir CSV.");
+      Swal.fire({ title: "Error de conexión", text: "Error de conexión al subir CSV.", icon: "error" });
     }
   };
 
@@ -323,11 +327,11 @@ const cambiarEstadoReporte = async (reporteId, nuevoEstado) => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message);
+        Swal.fire({ title: "Éxito", text: data.message, icon: "success" });
         cargarRutas();
       }
     } catch (error) {
-      alert("Error al cambiar estado.");
+      Swal.fire({ title: "Error", text: "Error al cambiar estado.", icon: "error" });
     }
   };
 
@@ -1730,7 +1734,10 @@ const enviarRespuestaReporte = async (reporteId) => {
               <button
                 className="btn btn-danger"
                 onClick={() => {
-                  if (!motivoCancelacion.trim()) return alert("Por favor, ingresa un motivo para notificar a los clientes.");
+                  if (!motivoCancelacion.trim()) {
+                    Swal.fire({ title: "Advertencia", text: "Por favor, ingresa un motivo para notificar a los clientes.", icon: "warning" });
+                    return;
+                  }
                   cambiarEstadoRuta(modalCancelacion, "cancelada", motivoCancelacion);
                   setModalCancelacion(null);
                   setMotivoCancelacion("");

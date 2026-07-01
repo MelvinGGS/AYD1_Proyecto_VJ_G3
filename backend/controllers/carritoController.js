@@ -44,10 +44,7 @@ const obtenerCarrito = async (req, res) => {
         console.error("Error al obtener el carrito:", error);
         res.status(500).json({ success: false, message: "Error al obtener el carrito de compras." });
     }
-};
-
-// Con esta funcion agregamos un servicio envío o transporte al carrito de compras de un cliente específico
-const agregarAlCarrito = async (req, res) => {
+};const agregarAlCarrito = async (req, res) => {
     const clienteId = req.usuario.id;
     const { 
         tipo_servicio, // 'envio' o 'transporte'
@@ -66,14 +63,59 @@ const agregarAlCarrito = async (req, res) => {
         return res.status(400).json({ success: false, message: "El tipo de servicio debe ser 'envio' o 'transporte'." });
     }
 
-    // Calculamos el subtotal
-    const subtotal = (parseFloat(precio_unitario) * parseInt(cantidad)).toFixed(2);
-
-    // Asignamos el ID al campo correspondiente según la tabla
-    const servicioEnvioId = tipo_servicio === 'envio' ? servicio_id : null;
-    const rutaTransporteId = tipo_servicio === 'transporte' ? servicio_id : null;
+    // 1. Validar 24 horas de anticipación (a partir de mañana)
+    const ahora = new Date();
+    const mañana = new Date(ahora.getTime() + 24 * 60 * 60 * 1000);
+    const mañanaStr = mañana.toISOString().split('T')[0];
+    if (fecha_inicio < mañanaStr) {
+        return res.status(400).json({ 
+            success: false, 
+            message: "Debe programar con al menos 24 horas de anticipación." 
+        });
+    }
 
     try {
+        // 2. Validar traslapes (No overlap) con reservaciones existentes
+        if (tipo_servicio === 'envio') {
+            const finDate = fecha_fin || fecha_inicio;
+            const overlapQuery = `
+                SELECT id FROM reservaciones 
+                WHERE estado = 'confirmado' 
+                  AND servicio_envio_id = $1 
+                  AND (fecha_inicio <= $2 AND fecha_fin >= $3)
+                LIMIT 1
+            `;
+            const overlapRes = await db.pool.query(overlapQuery, [servicio_id, finDate, fecha_inicio]);
+            if (overlapRes.rows.length > 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: "Ya existe una reservación activa para este servicio de envío en las fechas seleccionadas." 
+                });
+            }
+        } else if (tipo_servicio === 'transporte') {
+            const overlapQuery = `
+                SELECT id FROM reservaciones 
+                WHERE estado = 'confirmado' 
+                  AND ruta_transporte_id = $1 
+                  AND fecha_inicio = $2
+                LIMIT 1
+            `;
+            const overlapRes = await db.pool.query(overlapQuery, [servicio_id, fecha_inicio]);
+            if (overlapRes.rows.length > 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: "Ya existe una reservación activa para esta ruta de transporte en la fecha seleccionada." 
+                });
+            }
+        }
+
+        // Calculamos el subtotal
+        const subtotal = (parseFloat(precio_unitario) * parseInt(cantidad)).toFixed(2);
+
+        // Asignamos el ID al campo correspondiente según la tabla
+        const servicioEnvioId = tipo_servicio === 'envio' ? servicio_id : null;
+        const rutaTransporteId = tipo_servicio === 'transporte' ? servicio_id : null;
+
         const query = `
             INSERT INTO carrito_compras (
                 cliente_id, tipo_servicio, servicio_envio_id, ruta_transporte_id, 
